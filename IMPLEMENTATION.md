@@ -1,0 +1,457 @@
+# QuickShare - Faz Faz İmplementasyon Planı
+
+## 📋 Genel Bakış
+
+Bu doküman QuickShare projesinin faz faz nasıl geliştirileceğini detaylı olarak açıklar. Her faz bağımsız test edilebilir şekilde tasarlanmıştır.
+
+---
+
+## FAZ 1: Proje Kurulumu & Cloudflared Entegrasyonu ⏱️ 45 dakika
+
+### Hedef
+Temel proje yapısını kurmak ve Cloudflared'i çalıştırıp test etmek.
+
+### Adımlar
+
+#### 1.1. Proje Yapısını Oluştur
+```bash
+# Klasörler zaten var, sadece dosyaları dolduracağız
+```
+
+#### 1.2. requirements.txt Oluştur
+- Flask
+- requests
+- pyinstaller (build için)
+
+#### 1.3. config.py Oluştur
+```python
+# Port, chunk size, timeout gibi sabitler
+SERVER_PORT = 5000
+CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
+BUFFER_SIZE = 256 * 1024      # 256KB
+TIMEOUT = 30                   # saniye
+```
+
+#### 1.4. Cloudflared Binary İndir
+- Windows için cloudflared.exe indir
+- `bin/cloudflared.exe` yoluna yerleştir
+- Boyutu kontrol et (~2-3 MB olmalı)
+
+#### 1.5. tunnel_manager.py Oluştur
+**Görevler:**
+- Cloudflared process'ini başlat
+- Public URL'i yakalayıp dön
+- Process'i düzgün kapat
+- Hata yönetimi
+
+**Test:**
+```python
+# Test kodu:
+if __name__ == "__main__":
+    manager = TunnelManager(port=5000)
+    url = manager.start()
+    print(f"Public URL: {url}")
+    input("Press Enter to stop...")
+    manager.stop()
+```
+
+#### 1.6. Test Et
+✅ Cloudflared başlatılabiliyor mu?  
+✅ Public URL alınıyor mu?  
+✅ Process düzgün kapanıyor mu?  
+
+### Teslim Çıktıları
+- ✅ `config.py` çalışıyor
+- ✅ `tunnel_manager.py` test edildi
+- ✅ `cloudflared.exe` indirildi ve çalışıyor
+
+---
+
+## FAZ 2: Flask Server & Dosya Streaming ⏱️ 1.5 saat
+
+### Hedef
+Dosyaları HTTP üzerinden stream edebilen Flask server yazmak.
+
+### Adımlar
+
+#### 2.1. server.py Oluştur
+
+**Endpoints:**
+```python
+GET  /              → Dosya listesi (JSON)
+GET  /download      → Tüm dosyalar ZIP olarak (stream)
+GET  /file/<name>   → Tek dosya (stream)
+GET  /ping          → Health check
+POST /status        → Transfer durumu (opsiyonel)
+```
+
+#### 2.2. Dosya Listesi Endpoint
+```python
+@app.route('/')
+def list_files():
+    # Seçili dosyaların listesini JSON dön
+    return {
+        "files": [
+            {"name": "video.mp4", "size": 1234567, "path": "..."},
+            ...
+        ]
+    }
+```
+
+#### 2.3. Tek Dosya Streaming
+```python
+@app.route('/file/<filename>')
+def download_file(filename):
+    # Chunk-by-chunk streaming
+    # Response.stream_with_context kullan
+```
+
+#### 2.4. ZIP Streaming (Çoklu Dosya)
+```python
+@app.route('/download')
+def download_all():
+    # zipfile ile on-the-fly zip oluştur
+    # Stream olarak gönder
+```
+
+#### 2.5. utils.py - Helper Fonksiyonlar
+```python
+def format_size(bytes: int) -> str:
+    """1234567 -> '1.18 MB'"""
+    
+def format_speed(bytes_per_sec: float) -> str:
+    """1234567 -> '1.18 MB/s'"""
+    
+def format_time(seconds: int) -> str:
+    """125 -> '2m 5s'"""
+```
+
+#### 2.6. Test Et
+```bash
+# Terminal 1: Server başlat
+python server.py
+
+# Terminal 2: Test dosyası indir
+curl http://localhost:5000/file/test.txt -o test_downloaded.txt
+```
+
+✅ Dosya listeleniyor mu?  
+✅ Tek dosya indiriliyor mu?  
+✅ Çoklu dosya ZIP olarak indiriliyor mu?  
+✅ Progress gösterilebiliyor mu?  
+
+### Teslim Çıktıları
+- ✅ `server.py` çalışıyor
+- ✅ `utils.py` helper fonksiyonları hazır
+- ✅ Streaming test edildi
+
+---
+
+## FAZ 3: GUI - Gönderen Mod ⏱️ 1.5 saat
+
+### Hedef
+Tkinter ile basit GUI oluştur - Gönderen modu.
+
+### Adımlar
+
+#### 3.1. main.py - Ana Pencere
+```python
+# Tkinter window setup
+# Ana menü: [Dosya Gönder] [Dosya Al]
+```
+
+#### 3.2. Gönderen Ekranı
+**Bileşenler:**
+- Dosya seçme butonu (tkinter.filedialog)
+- Seçili dosya listesi (Listbox)
+- "Başlat" butonu
+- URL gösterimi (Entry + Kopyala butonu)
+- Progress bar (ttk.Progressbar)
+- Transfer bilgileri (Label: hız, boyut, kalan süre)
+
+#### 3.3. İş Akışı Entegrasyonu
+1. Kullanıcı dosya seçer
+2. "Başlat" → Thread'de server başlatılır
+3. Thread'de tunnel başlatılır
+4. URL alınıp gösterilir
+5. Transfer başladığında progress güncellenir
+
+#### 3.4. Threading Yapısı
+```python
+# GUI freeze olmaması için:
+- Flask server thread'de çalışacak
+- Cloudflared ayrı process
+- Progress update için periodic callback
+```
+
+#### 3.5. Test Et
+✅ GUI açılıyor mu?  
+✅ Dosya seçimi çalışıyor mu?  
+✅ Server + tunnel başlatılıyor mu?  
+✅ URL gösteriliyor ve kopyalanıyor mu?  
+✅ Progress bar güncelleniyor mu?  
+
+### Teslim Çıktıları
+- ✅ `main.py` gönderen modu çalışıyor
+- ✅ Threading düzgün
+- ✅ GUI responsive
+
+---
+
+## FAZ 4: İndirme Mantığı - Alıcı Mod ⏱️ 1 saat
+
+### Hedef
+URL'den dosya indirme mantığını yazıp GUI'ye entegre et.
+
+### Adımlar
+
+#### 4.1. downloader.py Oluştur
+```python
+class Downloader:
+    def download_file(url: str, save_path: str, progress_callback):
+        # requests.get(url, stream=True)
+        # Chunk-by-chunk indir
+        # Her chunk'ta progress_callback çağır
+```
+
+#### 4.2. Alıcı GUI Ekranı
+**Bileşenler:**
+- URL girişi (Entry)
+- "Bağlan" butonu
+- Dosya listesi (Listbox - uzak sunucudan alınacak)
+- Kayıt yeri seçimi (tkinter.filedialog.askdirectory)
+- "İndir" butonu
+- Progress bar + bilgiler
+
+#### 4.3. İş Akışı
+1. Kullanıcı URL girer
+2. "Bağlan" → GET / yapılır (dosya listesi alınır)
+3. Dosyalar gösterilir
+4. Kullanıcı kayıt yeri seçer
+5. "İndir" → Thread'de download başlar
+6. Progress güncellenir
+
+#### 4.4. Hata Yönetimi
+- URL geçersiz ise hata göster
+- Bağlantı hatası
+- Disk dolu hatası
+- Network timeout
+
+#### 4.5. Test Et
+✅ URL girişi çalışıyor mu?  
+✅ Dosya listesi alınıyor mu?  
+✅ İndirme çalışıyor mu?  
+✅ Progress doğru gösteriliyor mu?  
+✅ Hatalar düzgün yakalanıyor mu?  
+
+### Teslim Çıktıları
+- ✅ `downloader.py` çalışıyor
+- ✅ Alıcı modu GUI'de entegre
+- ✅ İki PC arası test yapıldı
+
+---
+
+## FAZ 5: PyInstaller Paketleme ⏱️ 45 dakika
+
+### Hedef
+Tek exe dosyası oluştur.
+
+### Adımlar
+
+#### 5.1. build_exe.py Oluştur
+```python
+import PyInstaller.__main__
+
+PyInstaller.__main__.run([
+    'main.py',
+    '--onefile',
+    '--windowed',  # Console gizle
+    '--name=QuickShare',
+    '--icon=icon.ico',  # İsteğe bağlı
+    '--add-binary=bin/cloudflared.exe;.',
+    '--hidden-import=tkinter',
+    '--clean',
+])
+```
+
+#### 5.2. İkon Hazırla (Opsiyonel)
+- Basit bir ikon oluştur veya indir
+- `icon.ico` olarak kaydet
+
+#### 5.3. Build Et
+```bash
+python build_exe.py
+# Çıktı: dist/QuickShare.exe
+```
+
+#### 5.4. Test Et
+✅ Exe çalışıyor mu?  
+✅ Boyut 5 MB'ın altında mı?  
+✅ Cloudflared embed edilmiş mi?  
+✅ GUI açılıyor mu?  
+✅ Tüm fonksiyonlar çalışıyor mu?  
+
+#### 5.5. Optimizasyon
+- UPX compression (opsiyonel, boyutu küçültür)
+- Gereksiz modülleri çıkar
+
+### Teslim Çıktıları
+- ✅ `build_exe.py` hazır
+- ✅ `QuickShare.exe` oluşturuldu
+- ✅ Exe boyutu < 5 MB
+- ✅ Tüm özellikler çalışıyor
+
+---
+
+## FAZ 6: Test & Optimizasyon ⏱️ 1-2 saat
+
+### Hedef
+Gerçek senaryolarda test et ve optimize et.
+
+### Adımlar
+
+#### 6.1. Yerel Test
+- Aynı PC'de gönderen/alıcı mod
+- Küçük dosya (1 MB)
+- Büyük dosya (100 MB)
+- Çoklu dosya (klasör)
+
+#### 6.2. Gerçek Test
+- İki farklı Windows PC
+- Farklı ağlar (WiFi, mobil hotspot)
+- 500 MB - 1 GB dosya
+- Hız ölçümü
+
+#### 6.3. Hata Senaryoları
+- Network kesilirse ne olur?
+- Disk dolu
+- URL yanlış
+- Server kapanırsa
+
+#### 6.4. Performans Optimizasyonu
+- Chunk size ayarla (8MB optimal mi?)
+- Buffer size ayarla
+- Thread sayısı optimize et
+
+#### 6.5. UX İyileştirmeleri
+- Hata mesajları daha açıklayıcı
+- Butonlar disable/enable doğru mu?
+- Progress bar smooth mu?
+
+#### 6.6. Güvenlik Test
+- Antivirüs taraması
+- Windows Defender False positive var mı?
+
+### Test Checklist
+
+**Fonksiyonel Testler:**
+- [ ] Tek dosya gönderme/alma
+- [ ] Çoklu dosya gönderme/alma
+- [ ] Klasör gönderme/alma
+- [ ] 10 MB dosya - hız testi
+- [ ] 100 MB dosya - hız testi
+- [ ] 1 GB dosya - hız testi
+- [ ] WhatsApp'tan exe paylaşma
+- [ ] Link kopyalama
+- [ ] Progress bar doğruluğu
+
+**Hata Testleri:**
+- [ ] Yanlış URL girişi
+- [ ] Network kesintisi
+- [ ] Disk dolu
+- [ ] Server crash
+- [ ] Cloudflared başlatılamama
+
+**Performans Testleri:**
+- [ ] Exe boyutu < 5 MB
+- [ ] GUI açılış < 2 saniye
+- [ ] LAN hızı > 10 MB/s
+- [ ] İnternet hızı > 5 MB/s
+- [ ] Memory kullanımı < 100 MB
+
+### Teslim Çıktıları
+- ✅ Tüm testler geçti
+- ✅ Performans hedeflere ulaştı
+- ✅ Bilinen buglar düzeltildi
+- ✅ Final exe hazır
+
+---
+
+## 🎯 Başarı Kriterleri
+
+Her fazın sonunda aşağıdakiler sağlanmalı:
+
+### FAZ 1
+- [x] Cloudflared çalışıyor
+- [x] Public URL alınabiliyor
+
+### FAZ 2
+- [x] Flask server dosya sunuyor
+- [x] Streaming çalışıyor
+- [x] ZIP desteği var
+
+### FAZ 3
+- [x] GUI çalışıyor
+- [x] Dosya seçimi çalışıyor
+- [x] URL gösteriliyor
+
+### FAZ 4
+- [x] URL'den indirme çalışıyor
+- [x] Progress bar doğru
+
+### FAZ 5
+- [x] Exe oluşturuluyor
+- [x] Boyut < 5 MB
+
+### FAZ 6
+- [x] Tüm testler geçti
+- [x] Performans OK
+
+---
+
+## 📊 Zaman Tahmini
+
+| Faz | Süre | Kümülatif |
+|-----|------|-----------|
+| FAZ 1 | 45 dk | 45 dk |
+| FAZ 2 | 1.5 saat | 2h 15m |
+| FAZ 3 | 1.5 saat | 3h 45m |
+| FAZ 4 | 1 saat | 4h 45m |
+| FAZ 5 | 45 dk | 5h 30m |
+| FAZ 6 | 1-2 saat | 6h 30m - 7h 30m |
+
+**Toplam: ~6-8 saat**
+
+---
+
+## 🚀 Başlamadan Önce Checklist
+
+- [ ] Python 3.10+ kurulu
+- [ ] pip çalışıyor
+- [ ] Git kurulu (opsiyonel)
+- [ ] İnternet bağlantısı var (cloudflared indirme için)
+- [ ] Windows (test ortamı)
+
+---
+
+## 📝 Notlar
+
+- Her faz sonunda commit yap (git kullanıyorsan)
+- Her faz bağımsız test edilebilir
+- Sorun çıkarsa önceki faza dön
+- Optimizasyonu en sona bırak (premature optimization kaça)
+
+---
+
+## 🎓 Öğrenilecekler
+
+Bu projeyi tamamladığında şunları öğrenmiş olacaksın:
+- Flask streaming API
+- Tkinter GUI + Threading
+- Cloudflare Tunnel kullanımı
+- PyInstaller ile exe paketleme
+- HTTP chunk transfer
+- Progress tracking
+- Error handling best practices
+
+İyi çalışmalar! 🚀

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+build/
+dist/
+*.egg-info/
+
+# PyInstaller
+*.spec
+
+# Cloudflared
+bin/cloudflared.exe
+
+# IDE
+.vscode/
+.idea/
+
+# Test
+test_files/
+
+# OS
+.DS_Store
+Thumbs.db
