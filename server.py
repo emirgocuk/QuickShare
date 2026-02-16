@@ -9,11 +9,12 @@ import os
 import io
 import time
 import threading
+import re
 import zipfile
 import base64
 from typing import List, Dict
 from config import CHUNK_SIZE, SERVER_HOST, SERVER_PORT
-from utils import create_file_info, get_files_from_directory, calculate_total_size
+from utils import create_file_info, get_files_from_directory, calculate_total_size, calculate_file_hash
 
 
 app = Flask(__name__)
@@ -27,6 +28,7 @@ class TransferMonitor:
         self.active_transfers = 0
         self._last_check_time = time.time()
         self._last_sent_bytes = 0
+        self.active_files: Dict[str, Dict] = {}
         self._lock = threading.Lock()
 
     def set_total_size(self, size: int):
@@ -36,6 +38,20 @@ class TransferMonitor:
     def add_bytes(self, count: int):
         with self._lock:
             self.total_sent += count
+
+    def update_file_progress(self, filename: str, sent: int, total: int):
+        """Dosya bazlı ilerleme güncelle"""
+        with self._lock:
+            if filename not in self.active_files:
+                self.active_files[filename] = {'sent': 0, 'size': total}
+            
+            self.active_files[filename]['sent'] += sent
+            self.active_files[filename]['size'] = total 
+
+    def finish_file(self, filename: str):
+        with self._lock:
+            if filename in self.active_files:
+                del self.active_files[filename]
 
     def start_transfer(self):
         with self._lock:
@@ -68,12 +84,16 @@ class TransferMonitor:
     def get_stats(self) -> Dict:
         """İstatistikleri döndür"""
         speed, eta = self.calculate_speed_and_eta()
+        with self._lock:
+            files_copy = self.active_files.copy()
+            
         return {
             "total_sent": self.total_sent,
             "total_size": self.total_size,
             "speed": speed,
             "eta": eta,
-            "active": self.active_transfers
+            "active": self.active_transfers,
+            "files": files_copy
         }
 
 # Global Monitor Instance
@@ -183,9 +203,13 @@ def download_file(filename: str):
                         break
                     remaining -= len(chunk)
                     transfer_monitor.add_bytes(len(chunk))
+                    # Update file progress
+                    current_sent = length - remaining
+                    transfer_monitor.update_file_progress(os.path.basename(target_file), current_sent, length)
                     yield chunk
         finally:
             transfer_monitor.end_transfer()
+            transfer_monitor.finish_file(os.path.basename(target_file))
 
     # Streaming Response
     headers = {
@@ -288,9 +312,13 @@ def download_file_b64(encoded_filename: str):
                         break
                     remaining -= len(chunk)
                     transfer_monitor.add_bytes(len(chunk))
+                    # Update file progress
+                    current_sent = length - remaining
+                    transfer_monitor.update_file_progress(os.path.basename(target_file), current_sent, length)
                     yield chunk
         finally:
             transfer_monitor.end_transfer()
+            transfer_monitor.finish_file(os.path.basename(target_file))
 
     # Streaming Response
     headers = {
@@ -325,14 +353,18 @@ def download_all():
             # In-memory buffer
             buffer = io.BytesIO()
             
-            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                for path in shared_files:
-                    if os.path.isfile(path):
-                        zip_file.write(path, os.path.basename(path))
-                    elif os.path.isdir(path):
-                        for file in get_files_from_directory(path):
-                            arcname = os.path.relpath(file, os.path.dirname(path))
-                            zip_file.write(file, arcname)
+            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                # Dosyaları ekle
+                for file_path in shared_files:
+                    if os.path.isfile(file_path):
+                        arcname = os.path.basename(file_path)
+                        zf.write(file_path, arcname)
+                    elif os.path.isdir(file_path):
+                        for root, _, files in os.walk(file_path):
+                            for file in files:
+                                full_path = os.path.join(root, file)
+                                rel_path = os.path.relpath(full_path, os.path.dirname(file_path))
+                                zf.write(full_path, rel_path)
             
             # Buffer'ı başa al
             buffer.seek(0)
@@ -343,9 +375,11 @@ def download_all():
                 if not chunk:
                     break
                 transfer_monitor.add_bytes(len(chunk))
+                transfer_monitor.update_file_progress("ALL_FILES.zip", transfer_monitor.total_sent, transfer_monitor.total_size)
                 yield chunk
         finally:
             transfer_monitor.end_transfer()
+            transfer_monitor.finish_file("ALL_FILES.zip")
     
     return Response(
         stream_with_context(generate_zip()),
@@ -354,6 +388,46 @@ def download_all():
             'Content-Disposition': 'attachment; filename=download.zip'
         }
     )
+
+
+@app.route('/hash/<path:filename>')
+def get_file_hash(filename: str):
+    """
+    Dosyanın SHA256 hash'ini hesapla ve döndür
+    
+    Args:
+        filename: Dosya adı (veya relative path)
+        
+    Returns:
+        JSON: {"hash": "..."}
+    """
+    # Dosyayı shared_files içinde ara
+    target_file = None
+    
+    for path in shared_files:
+        if os.path.isfile(path):
+            if os.path.basename(path) == filename:
+                target_file = path
+                break
+        elif os.path.isdir(path):
+            for file in get_files_from_directory(path):
+                rel_path = os.path.relpath(file, path)
+                if rel_path.replace('\\', '/') == filename.replace('\\', '/'):
+                    target_file = file
+                    break
+            if target_file:
+                break
+    
+    if not target_file or not os.path.exists(target_file):
+        return jsonify({"error": "File not found"}), 404
+        
+    # Hash hesapla (bu işlem büyük dosyalarda zaman alabilir)
+    # TODO: Cache mekanizması eklenebilir
+    try:
+        file_hash = calculate_file_hash(target_file)
+        return jsonify({"hash": file_hash})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 def set_shared_files(files: List[str]):

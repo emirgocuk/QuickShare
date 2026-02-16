@@ -8,7 +8,8 @@ SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 5000
 
 # Transfer Ayarları
-CHUNK_SIZE = 8 * 1024 * 1024      # 8 MB (optimal streaming chunk size)
+# Transfer Ayarları
+CHUNK_SIZE = 64 * 1024           # 64 KB (smoother progress bars)
 BUFFER_SIZE = 256 * 1024           # 256 KB (file read buffer)
 MAX_FILE_SIZE = 50 * 1024 * 1024 * 1024  # 50 GB limit (opsiyonel)
 

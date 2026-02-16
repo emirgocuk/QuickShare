@@ -1,13 +1,16 @@
 """
-QuickShare Main Application - CustomTkinter Version
-Modern GUI with CustomTkinter
+QuickShare Main Application - Modern UI with Sidebar & Drag-Drop
 """
 
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
+import tkinter as tk
+from tkinterdnd2 import DND_FILES, TkinterDnD
 import threading
 import sys
 import time
+import os
+import webbrowser
 from typing import List, Optional
 
 from config import WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE
@@ -15,718 +18,565 @@ from utils import format_size, format_speed, format_time, validate_url, calculat
 from server import set_shared_files, run_server, transfer_monitor
 from tunnel_manager import TunnelManager
 from downloader import Downloader
+from tailscale_manager import TailscaleManager
 
 # CustomTkinter appearance
-ctk.set_appearance_mode("dark")  # "dark" | "light" | "system"
-ctk.set_default_color_theme("blue")  # "blue" | "green" | "dark-blue"
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
 
+import atexit
 
-class QuickShareApp:
-    """QuickShare Ana Uygulama"""
+class Tk(ctk.CTk, TkinterDnD.DnDWrapper):
+    """CustomTkinter + TkinterDnD Wrapper"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.TkdndVersion = TkinterDnD._require(self)
+
+class QuickShareApp(Tk):
+    """QuickShare Modern UI Application"""
     
     def __init__(self):
-        self.root = ctk.CTk()
-        self.root.title(WINDOW_TITLE)
-        self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
-        self.root.resizable(True, True)
-        self.root.minsize(600, 500)
+        super().__init__()
         
-        self.mode: Optional[str] = None  # "send" veya "receive"
+        # Window Setup
+        self.title(WINDOW_TITLE)
+        self.geometry(f"{800}x{600}")  # Slightly larger for sidebar
+        self.minsize(700, 500)
+        
+        # State
         self.selected_files: List[str] = []
         self.tunnel_manager: Optional[TunnelManager] = None
+        self.tailscale = TailscaleManager()
+        atexit.register(self.tailscale.cleanup)
+        self.use_high_speed = False
         self.server_thread: Optional[threading.Thread] = None
         self.downloader: Optional[Downloader] = None
         self.download_url: Optional[str] = None
         self.remote_files: List[dict] = []
-        
-        self.show_main_menu()
-        
-    def run(self):
-        """Uygulamayı başlat"""
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.is_sharing = False  # Sharing flag for metrics loop
-        self.root.mainloop()
-    
-    def on_closing(self):
-        """Pencere kapatılıyor"""
         self.is_sharing = False
-        # Server ve tunnel'ı durdur
-        if self.tunnel_manager:
-            self.tunnel_manager.stop()
         
-        self.root.destroy()
-    
-    def clear_window(self):
-        """Tüm widget'ları temizle"""
-        for widget in self.root.winfo_children():
-            widget.destroy()
-    
-    def show_main_menu(self):
-        """Ana menü ekranı"""
-        self.clear_window()
-        self.mode = None
+        # Grid Layout (1x2)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
         
-        # Ana frame
-        main_frame = ctk.CTkFrame(self.root)
-        main_frame.pack(expand=True, fill='both', padx=30, pady=30)
+        self.setup_sidebar()
+        self.setup_pages()
         
-        # Başlık
-        title = ctk.CTkLabel(
-            main_frame,
-            text="📦 QuickShare",
-            font=("Arial", 28, "bold")
+        # Start at Home
+        self.select_frame("home")
+        
+    def setup_sidebar(self):
+        """Create the sidebar navigation"""
+        self.sidebar_frame = ctk.CTkFrame(self, width=140, corner_radius=0)
+        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+        
+        # Logo / Title
+        self.logo_label = ctk.CTkLabel(
+            self.sidebar_frame, 
+            text=" QuickShare", 
+            font=ctk.CTkFont(size=20, weight="bold")
         )
-        title.pack(pady=(20, 10))
+        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
         
-        subtitle = ctk.CTkLabel(
-            main_frame,
-            text="Hızlı ve Kolay Dosya Paylaşımı",
-            font=("Arial", 13)
+        # Navigation Buttons
+        self.sidebar_button_home = ctk.CTkButton(
+            self.sidebar_frame, text="🏠 Ana Sayfa", command=lambda: self.select_frame("home")
         )
-        subtitle.pack(pady=(0, 30))
+        self.sidebar_button_home.grid(row=1, column=0, padx=20, pady=10)
         
-        # Butonlar
-        send_btn = ctk.CTkButton(
-            main_frame,
-            text="📤 Dosya Gönder",
-            command=self.show_sender_screen,
-            font=("Arial", 16, "bold"),
-            height=60,
-            corner_radius=10
+        self.sidebar_button_send = ctk.CTkButton(
+            self.sidebar_frame, text="📤 Gönder", command=lambda: self.select_frame("send")
         )
-        send_btn.pack(pady=15, padx=50, fill='x')
+        self.sidebar_button_send.grid(row=2, column=0, padx=20, pady=10)
         
-        receive_btn = ctk.CTkButton(
-            main_frame,
-            text="📥 Dosya Al",
-            command=self.show_receiver_screen,
-            font=("Arial", 16, "bold"),
-            height=60,
-            corner_radius=10,
-            fg_color="#06A77D",
-            hover_color="#058c68"
+        self.sidebar_button_receive = ctk.CTkButton(
+            self.sidebar_frame, text="📥 Al", command=lambda: self.select_frame("receive")
         )
-        receive_btn.pack(pady=15, padx=50, fill='x')
-    
-    # SENDER SCREEN
-    def show_sender_screen(self):
-        """Gönderen ekranı"""
-        self.clear_window()
-        self.mode = "send"
+        self.sidebar_button_receive.grid(row=3, column=0, padx=20, pady=10)
         
-        # Main frame with scrollable area
-        main_frame = ctk.CTkFrame(self.root)
-        main_frame.pack(expand=True, fill='both', padx=20, pady=20)
+        # High Speed Toggle
+        self.speed_switch = ctk.CTkSwitch(self.sidebar_frame, text="Hız Modu (VPN)", command=self.toggle_speed_mode)
+        self.speed_switch.grid(row=4, column=0, padx=20, pady=10, sticky="s")
         
-        # Başlık
-        title = ctk.CTkLabel(
-            main_frame,
-            text="📤 Dosya Gönder",
-            font=("Arial", 20, "bold")
+        # Settings / Info at bottom
+        self.sidebar_button_settings = ctk.CTkButton(
+            self.sidebar_frame, text="⚙️ Ayarlar", command=lambda: self.select_frame("settings"),
+            fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE")
         )
-        title.pack(pady=(10, 15))
+        self.sidebar_button_settings.grid(row=5, column=0, padx=20, pady=10)
         
-        # Dosya seçimi frame
-        file_frame = ctk.CTkFrame(main_frame)
-        file_frame.pack(fill='x', pady=10, padx=10)
-        
-        ctk.CTkLabel(file_frame, text="Paylaşılacak Dosyalar:", font=("Arial", 12, "bold")).pack(anchor='w', padx=10, pady=5)
-        
-        # Dosya listesi (CTkTextbox kullanarak - daha iyi görünüm)
-        self.file_textbox = ctk.CTkTextbox(file_frame, height=100, state='disabled')
-        self.file_textbox.pack(fill='both', padx=10, pady=5)
-        
-        # Buton frame
-        btn_frame = ctk.CTkFrame(file_frame, fg_color="transparent")
-        btn_frame.pack(fill='x', padx=10, pady=5)
-        
-        ctk.CTkButton(
-            btn_frame,
-            text="📁 Dosya Seç",
-            command=self.select_files,
-            width=120,
-            height=32
-        ).pack(side='left', padx=5)
-        
-        ctk.CTkButton(
-            btn_frame,
-            text="📂 Klasör Seç",
-            command=self.select_folder,
-            width=120,
-            height=32
-        ).pack(side='left', padx=5)
-        
-        ctk.CTkButton(
-            btn_frame,
-            text="🗑️ Temizle",
-            command=self.clear_files,
-            width=100,
-            height=32,
-            fg_color="#D62246",
-            hover_color="#b11d3a"
-        ).pack(side='left', padx=5)
-        
-        # Başlat butonu
-        self.start_btn = ctk.CTkButton(
-            main_frame,
-            text="🚀 Paylaşmaya Başla",
-            command=self.start_sharing,
-            font=("Arial", 14, "bold"),
-            height=45
+        # Connection Status
+        self.status_label = ctk.CTkLabel(
+            self.sidebar_frame, 
+            text="🔴 Çevrimdışı", 
+            font=ctk.CTkFont(size=12),
+            text_color="#ff5555"
         )
-        self.start_btn.pack(pady=15, padx=10, fill='x')
-        
-        # URL frame
-        self.url_frame = ctk.CTkFrame(main_frame, fg_color="#1a4d2e")
-        self.url_frame.pack(fill='x', pady=10, padx=10)
-        self.url_frame.pack_forget()
-        
-        ctk.CTkLabel(
-            self.url_frame,
-            text="🔗 Paylaşım Linki",
-            font=("Arial", 13, "bold"),
-            text_color="#90EE90"
-        ).pack(pady=(10, 5))
-        
-        url_entry_frame = ctk.CTkFrame(self.url_frame, fg_color="transparent")
-        url_entry_frame.pack(fill='x', padx=10, pady=(0, 10))
-        
-        self.url_entry = ctk.CTkEntry(
-            url_entry_frame,
-            font=("Arial", 12, "bold"),
-            state='readonly',
-            text_color="#90EE90"
-        )
-        self.url_entry.pack(side='left', fill='x', expand=True, padx=(0, 10))
-        
-        ctk.CTkButton(
-            url_entry_frame,
-            text="📋 Kopyala",
-            command=self.copy_url_to_clipboard,
-            width=100,
-            fg_color="#06A77D",
-            hover_color="#058c68"
-        ).pack(side='right')
-        
-        # Progress
-        # Progress / Metrics Panel (Sender)
-        self.sender_metrics_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-        self.sender_metrics_frame.pack(fill='x', pady=5, padx=10)
-        self.sender_metrics_frame.pack_forget()
+        self.status_label.grid(row=6, column=0, padx=20, pady=(0, 20))
 
-        self.sender_speed_label = ctk.CTkLabel(
-            self.sender_metrics_frame, 
-            text="", 
-            font=("Arial", 12, "bold"), 
-            text_color="#90EE90"
-        )
-        self.sender_speed_label.pack()
+    def setup_pages(self):
+        """Initialize all page frames"""
+        # Home Frame
+        self.home_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.setup_home_ui()
+        
+        # Send Frame
+        self.send_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.setup_send_ui()
+        
+        # Receive Frame
+        self.receive_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.setup_receive_ui()
+        
+        # Settings Frame
+        self.settings_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.setup_settings_ui()
 
-        self.sender_total_label = ctk.CTkLabel(
-            self.sender_metrics_frame, 
-            text="", 
-            font=("Arial", 11)
-        )
-        self.sender_total_label.pack()
+    def select_frame(self, name):
+        """Switch active frame"""
+        # Reset button colors
+        self.sidebar_button_home.configure(fg_color=("gray75", "gray25") if name == "home" else "transparent")
+        self.sidebar_button_send.configure(fg_color=("gray75", "gray25") if name == "send" else "transparent")
+        self.sidebar_button_receive.configure(fg_color=("gray75", "gray25") if name == "receive" else "transparent")
         
-        # Stop button
-        self.stop_btn = ctk.CTkButton(
-            main_frame,
-            text="⏹️ Paylaşımı Durdur",
-            command=self.stop_sharing,
-            fg_color="#D62246",
-            hover_color="#b11d3a",
-            height=40
-        )
-        self.stop_btn.pack(pady=10, padx=10, fill='x')
-        self.stop_btn.pack_forget()
+        # Hide all
+        self.home_frame.grid_forget()
+        self.send_frame.grid_forget()
+        self.receive_frame.grid_forget()
+        self.settings_frame.grid_forget()
         
-        # Geri butonu
-        ctk.CTkButton(
-            main_frame,
-            text="← Geri",
-            command=self.show_main_menu,
-            width=100,
-            height=32,
-            fg_color="gray40",
-            hover_color="gray30"
-        ).pack(pady=5)
+        # Show selected
+        if name == "home":
+            self.home_frame.grid(row=0, column=1, sticky="nsew")
+        elif name == "send":
+            self.send_frame.grid(row=0, column=1, sticky="nsew")
+        elif name == "receive":
+            self.receive_frame.grid(row=0, column=1, sticky="nsew")
+        elif name == "settings":
+            self.settings_frame.grid(row=0, column=1, sticky="nsew")
+
+    # --- UI SETUP METHODS ---
     
-    # RECEIVER SCREEN
-    def show_receiver_screen(self):
-        """Alıcı ekranı"""
-        self.clear_window()
-        self.mode = "receive"
+    def setup_home_ui(self):
+        """Home Dashboard UI"""
+        self.home_frame.grid_columnconfigure(0, weight=1)
         
-        main_frame = ctk.CTkFrame(self.root)
-        main_frame.pack(expand=True, fill='both', padx=20, pady=15)
+        ctk.CTkLabel(self.home_frame, text="QuickShare'e Hoşgeldiniz", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=40)
         
-        # Başlık
-        ctk.CTkLabel(
-            main_frame,
-            text="📥 Dosya Al",
-            font=("Arial", 20, "bold")
-        ).pack(pady=(10, 10))
+        # Status Cards
+        status_frame = ctk.CTkFrame(self.home_frame)
+        status_frame.pack(fill="x", padx=40, pady=20)
         
-        # URL input
-        url_frame = ctk.CTkFrame(main_frame)
-        url_frame.pack(fill='x', pady=5, padx=10)
+        ctk.CTkLabel(status_frame, text="Son Durum", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
+        ctk.CTkLabel(status_frame, text="Sistem Hazır ve Beklemede").pack(pady=(0, 20))
         
-        ctk.CTkLabel(url_frame, text="Bağlantı Linki:", font=("Arial", 12, "bold")).pack(anchor='w', padx=10, pady=5)
+        # Quick Actions
+        ctk.CTkButton(self.home_frame, text="Yeni Dosya Gönder", command=lambda: self.select_frame("send"), height=40).pack(pady=10)
+        ctk.CTkButton(self.home_frame, text="Dosya Al", command=lambda: self.select_frame("receive"), height=40, fg_color="#06A77D", hover_color="#058c68").pack(pady=10)
+
+    def setup_send_ui(self):
+        """Send UI with Drag & Drop"""
+        self.send_frame.grid_columnconfigure(0, weight=1)
+        self.send_frame.grid_rowconfigure(1, weight=1)  # File list expands
         
-        url_input_frame = ctk.CTkFrame(url_frame, fg_color="transparent")
-        url_input_frame.pack(fill='x', padx=10, pady=(0, 8))
+        # Header
+        header = ctk.CTkFrame(self.send_frame, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", padx=20, pady=20)
+        ctk.CTkLabel(header, text="Dosya Gönder", font=ctk.CTkFont(size=24, weight="bold")).pack(side="left")
         
-        self.url_input = ctk.CTkEntry(url_input_frame, placeholder_text="https://...")
-        self.url_input.pack(side='left', fill='x', expand=True, padx=(0, 10))
+        # Drag & Drop Area / File List
+        self.file_list_frame = ctk.CTkScrollableFrame(self.send_frame, label_text="⬆️ Dosyaları Buraya Sürükleyin")
+        self.file_list_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
+        
+        # Enable Drop
+        self.file_list_frame.drop_target_register(DND_FILES)
+        self.file_list_frame.dnd_bind('<<Drop>>', self.on_drop)
+        
+        # Help Text inside list
+        self.drop_help_label = ctk.CTkLabel(self.file_list_frame, text="Henüz dosya seçilmedi.\nDosyaları sürükleyip bırakın veya aşağıdaki butonları kullanın.", text_color="gray")
+        self.drop_help_label.pack(pady=50)
+        
+        # Controls
+        controls = ctk.CTkFrame(self.send_frame)
+        controls.grid(row=2, column=0, sticky="ew", padx=20, pady=20)
+        
+        ctk.CTkButton(controls, text="📁 Dosya Ekle", command=self.select_files).pack(side="left", padx=10, pady=10)
+        ctk.CTkButton(controls, text="📂 Klasör Ekle", command=self.select_folder).pack(side="left", padx=10, pady=10)
+        ctk.CTkButton(controls, text="🗑️ Temizle", command=self.clear_files, fg_color="#D62246", hover_color="#b11d3a", width=80).pack(side="left", padx=10, pady=10)
+        
+        self.start_btn = ctk.CTkButton(controls, text="🚀 Paylaş", command=self.start_sharing, font=ctk.CTkFont(weight="bold"))
+        self.start_btn.pack(side="right", padx=10, pady=10)
+        
+        # Active Sharing Info (Hidden initially)
+        self.sharing_info_frame = ctk.CTkFrame(self.send_frame, fg_color="transparent")
+        self.sharing_info_frame.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 20))
+        self.sharing_info_frame.grid_remove() # Start hidden
+        
+        self.url_entry = ctk.CTkEntry(self.sharing_info_frame, placeholder_text="Paylaşım Linki...", state="readonly")
+        self.url_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        
+        ctk.CTkButton(self.sharing_info_frame, text="Kopyala", command=self.copy_url, width=80).pack(side="left")
+        ctk.CTkButton(self.sharing_info_frame, text="Durdur", command=self.stop_sharing, fg_color="#D62246", hover_color="#b11d3a", width=80).pack(side="left", padx=10)
+
+        # Stats
+        self.stats_label = ctk.CTkLabel(self.sharing_info_frame, text="")
+        self.stats_label.pack(side="bottom", pady=5)
+
+    def setup_receive_ui(self):
+        """Receive UI"""
+        self.receive_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(self.receive_frame, text="Dosya Al", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=20, anchor="w", padx=20)
+        
+        # URL Input
+        input_frame = ctk.CTkFrame(self.receive_frame)
+        input_frame.pack(fill="x", padx=20, pady=10)
+        
+        ctk.CTkLabel(input_frame, text="Paylaşım Linki:").pack(anchor="w", padx=10, pady=(10, 5))
+        
+        url_box = ctk.CTkFrame(input_frame, fg_color="transparent")
+        url_box.pack(fill="x", padx=10, pady=(0, 10))
+        
+        self.url_input = ctk.CTkEntry(url_box, placeholder_text="https://...")
+        self.url_input.pack(side="left", fill="x", expand=True, padx=(0, 10))
         self.url_input.bind('<Return>', lambda e: self.connect_to_url())
         
-        self.connect_btn = ctk.CTkButton(
-            url_input_frame,
-            text="🔗 Bağlan",
-            command=self.connect_to_url,
-            width=120,
-            fg_color="#06A77D",
-            hover_color="#058c68"
-        )
-        self.connect_btn.pack(side='right')
+        self.connect_btn = ctk.CTkButton(url_box, text="Bağlan", command=self.connect_to_url)
+        self.connect_btn.pack(side="right")
         
-        # Dosya listesi - başlangıçta gizli
-        self.file_list_frame = ctk.CTkFrame(main_frame)
-        # pack_forget yerine pack etmiyoruz, _on_connected'da pack edeceğiz
+        # Remote Files List
+        self.remote_files_frame = ctk.CTkFrame(self.receive_frame)
+        # Pack later when connected
         
-        ctk.CTkLabel(self.file_list_frame, text="📋 Dosyalar:", font=("Arial", 12, "bold")).pack(anchor='w', padx=10, pady=5)
+        self.remote_files_tb = ctk.CTkTextbox(self.remote_files_frame, height=150, state="disabled")
+        self.remote_files_tb.pack(fill="both", padx=10, pady=10)
         
-        # Textbox - NORMAL state ile oluştur, sonra disable et
-        self.remote_file_textbox = ctk.CTkTextbox(self.file_list_frame, height=120)
-        self.remote_file_textbox.pack(fill='both', padx=10, pady=5)
-        self.remote_file_textbox.configure(state='disabled')
+        self.download_btn = ctk.CTkButton(self.remote_files_frame, text="📥 İndir", command=self.start_download, fg_color="#06A77D", hover_color="#058c68")
+        self.download_btn.pack(fill="x", padx=10, pady=(0, 10))
         
-        # Toplam boyut label
-        self.file_info_label = ctk.CTkLabel(
-            self.file_list_frame,
-            text="",
-            font=("Arial", 11),
-            text_color="#aaaaaa"
-        )
-        self.file_info_label.pack(anchor='w', padx=10, pady=(0, 5))
+        # Progress (Persistent)
+        self.progress_frame = ctk.CTkFrame(self.receive_frame, fg_color="transparent")
+        self.progress_frame.pack(fill="x", padx=20, pady=10)
         
-        # İndirme butonu - başlangıçta gizli
-        self.download_btn = ctk.CTkButton(
-            main_frame,
-            text="📦 Tümünü İndir",
-            command=self.start_download,
-            font=("Arial", 14, "bold"),
-            height=45,
-            fg_color="#06A77D",
-            hover_color="#058c68"
-        )
-        # pack etmiyoruz - _on_connected'da pack edeceğiz
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame)
+        self.progress_bar.pack(fill="x", pady=(0, 5))
+        self.progress_bar.set(0)
         
-        # Progress frame - başlangıçta gizli
-        self.receive_progress_container = ctk.CTkFrame(main_frame, fg_color="transparent")
-        # pack etmiyoruz - download başlayınca pack edeceğiz
+        self.progress_label = ctk.CTkLabel(self.progress_frame, text="Hazır - İndirme Bekleniyor")
+        self.progress_label.pack()
         
-        # Progress bar
-        self.receive_progress_bar = ctk.CTkProgressBar(self.receive_progress_container)
-        self.receive_progress_bar.pack(fill='x', pady=(0, 5))
-        self.receive_progress_bar.set(0)
+        # Log Console
+        self.log_label = ctk.CTkLabel(self.receive_frame, text="İşlem Logları:", anchor="w")
+        self.log_label.pack(fill="x", padx=20, pady=(10, 0))
         
-        # Ana metrik satırı (hız, yüzde, kalan süre)
-        self.receive_progress_label = ctk.CTkLabel(
-            self.receive_progress_container, 
-            text="", 
-            font=("Arial", 13, "bold"),
-            text_color="#90EE90"
-        )
-        self.receive_progress_label.pack()
+        self.log_box = ctk.CTkTextbox(self.receive_frame, height=100, state="disabled", font=ctk.CTkFont(family="Consolas", size=11))
+        self.log_box.pack(fill="x", padx=20, pady=5)
+
+    def log_message(self, msg):
+        """Log mesajını UI'a yaz"""
+        self.log_box.configure(state="normal")
+        self.log_box.insert("end", f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+        self.log_box.see("end")
+        self.log_box.configure(state="disabled")
+
+    def setup_settings_ui(self):
+        """Settings UI"""
+        ctk.CTkLabel(self.settings_frame, text="Ayarlar", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=20)
+        ctk.CTkLabel(self.settings_frame, text="(Gelecek sürümde eklenecek)").pack()
         
-        # Detay satırı (indirilen/toplam boyut)
-        self.receive_detail_label = ctk.CTkLabel(
-            self.receive_progress_container,
-            text="",
-            font=("Arial", 11)
-        )
-        self.receive_detail_label.pack(pady=(3, 0))
+    # --- LOGIC ---
+
+    def _download_thread(self, save_path):
+        try:
+            # Update Status to Receiving
+            self.after(0, lambda: self.status_label.configure(text="🟢 Dosya İndiriliyor", text_color="#06A77D"))
+            self.after(0, lambda: self.log_message(f"İndirme başlatıldı: {save_path}"))
+
+            def cb(dl, total, speed, current_file_index, total_files):
+                pct = (dl / total * 100) if total else 0
+                self.after(0, self.update_progress, pct, speed, current_file_index, total_files)
+            
+            # Log callback for main thread
+            def log_cb(msg):
+                self.after(0, lambda: self.log_message(msg))
+                
+            self.downloader.download_all(self.download_url, save_path, cb, log_cb)
+            self.after(0, self._on_download_complete, save_path)
+        except Exception as e:
+            # Bind e explicitly to lambda to avoid NameError
+            err_msg = str(e)
+            self.after(0, lambda: messagebox.showerror("Hata", err_msg))
+            self.after(0, lambda: self.log_message(f"HATA: {err_msg}"))
+            self.after(0, self._reset_download_ui)
+
+    # --- Tailscale Logic ---
+
+    def toggle_speed_mode(self):
+        """Handle High Speed Switch"""
+        if self.speed_switch.get() == 1:
+            self.use_high_speed = True
+            self.enable_high_speed()
+        else:
+            self.use_high_speed = False
+            self.status_label.configure(text="🔴 VPN Kapalı", text_color="#ff5555")
+            # Disable logic if needed (stop daemon?)
+            # self.tailscale.stop() 
+
+    def enable_high_speed(self):
+        """Start Tailscale Logic"""
+        if not self.tailscale.check_binaries():
+            messagebox.showerror("Hata", "Tailscale dosyaları (bin/tailscaled.exe) bulunamadı!\nLütfen dosyaları indirip 'bin' klasörüne atın.")
+            self.speed_switch.deselect()
+            return
+            
+        self.status_label.configure(text="🟡 VPN Başlatılıyor...", text_color="orange")
+        threading.Thread(target=self._tailscale_thread, daemon=True).start()
+
+    def _tailscale_thread(self):
+        def log_cb(msg):
+            # Log to receiver console if visible, or just print
+            print(f"[VPN] {msg}")
+            # Check for Auth URL
+            if "AUTH REQUIRED" in msg:
+                url = msg.split(": ")[1].strip()
+                self.after(0, lambda: self.show_auth_dialog(url))
+
+        # Start Daemon
+        self.tailscale.start_daemon(log_callback=log_cb)
         
-        # Geri butonu
-        self.back_btn_receiver = ctk.CTkButton(
-            main_frame,
-            text="← Geri",
-            command=self.show_main_menu,
-            width=100,
-            height=32,
-            fg_color="gray40",
-            hover_color="gray30"
-        )
-        self.back_btn_receiver.pack(pady=5)
-    
-    # SENDER METHODS
+        # Wait/Login
+        time.sleep(2)
+        self.tailscale.up()
+        
+        # Serve
+        time.sleep(2)
+        url = self.tailscale.serve(5000)
+        
+        if url:
+             self.after(0, lambda: self._on_vpn_ready(url))
+        else:
+             self.after(0, lambda: self.status_label.configure(text="🔴 VPN Hatası", text_color="red"))
+
+    def show_auth_dialog(self, url):
+        """Show dialog to authenticate"""
+        msg = "Cihazı eşleştirmek için tarayıcıda giriş yapın.\nLink kopyalandı!"
+        messagebox.showinfo("VPN Girişi", msg)
+        self.clipboard_clear()
+        self.clipboard_append(url)
+        webbrowser.open(url)
+
+    def _on_vpn_ready(self, url):
+        self.status_label.configure(text="🟢 VPN Aktif", text_color="#06A77D")
+        self.link_entry.delete(0, "end")
+        self.link_entry.insert(0, url)
+
+    def on_drop(self, event):
+        """Handle Drag & Drop files"""
+        # Event data returns strings like "{C:/path 1} C:/path2"
+        # Need to parse this. tkinterdnd2 returns a list of paths
+        files = self.TkdndVersion.splitlist(event.data)
+        self.selected_files.extend(files)
+        self.update_file_list()
+
     def select_files(self):
-        """Dosya seçimi"""
-        files = filedialog.askopenfilenames(title="Dosya Seçin")
+        files = filedialog.askopenfilenames()
         if files:
             self.selected_files.extend(files)
             self.update_file_list()
-    
+            
     def select_folder(self):
-        """Klasör seçimi"""
-        folder = filedialog.askdirectory(title="Klasör Seçin")
+        folder = filedialog.askdirectory()
         if folder:
             self.selected_files.append(folder)
             self.update_file_list()
-    
+            
     def clear_files(self):
-        """Dosya listesini temizle"""
         self.selected_files = []
         self.update_file_list()
-    
+        
     def update_file_list(self):
-        """Dosya listesini güncelle"""
-        self.file_textbox.configure(state='normal')
-        self.file_textbox.delete('1.0', 'end')
+        # Clear current list widgets
+        for widget in self.file_list_frame.winfo_children():
+            if widget != self.drop_help_label:
+                widget.destroy()
         
-        for file in self.selected_files:
-            import os
-            is_dir = os.path.isdir(file)
-            prefix = "[KLASÖR] " if is_dir else ""
-            self.file_textbox.insert('end', f"{prefix}{file}\n")
+        self.file_progress_labels = {}  # {filename: {'pct': label, 'bar': progressbar}}
         
-        self.file_textbox.configure(state='disabled')
-    
-    def start_sharing(self):
-        """Paylaşımı başlat"""
         if not self.selected_files:
-            messagebox.showwarning("Uyarı", "Lütfen en az bir dosya veya klasör seçin")
+            self.drop_help_label.pack(pady=50)
             return
+            
+        self.drop_help_label.pack_forget()
         
-        self.start_btn.configure(state='disabled', text="Başlatılıyor...")
-        
-        # Thread'de başlat
-        thread = threading.Thread(target=self._sharing_thread, daemon=True)
-        thread.start()
-    
+        for f in self.selected_files:
+            # Simple item row
+            row = ctk.CTkFrame(self.file_list_frame, fg_color=("gray80", "gray20"))
+            row.pack(fill="x", padx=5, pady=2)
+            
+            name = os.path.basename(f)
+            if os.path.isdir(f):
+                name = "📂 " + name
+            else:
+                name = "📄 " + name
+                
+            ctk.CTkLabel(row, text=name).pack(side="left", padx=10)
+            
+            # Percent Label
+            pct_label = ctk.CTkLabel(row, text="0%", width=40)
+            pct_label.pack(side="right", padx=10)
+            
+            self.file_progress_labels[os.path.basename(f)] = pct_label
+            
+    def start_sharing(self):
+        if not self.selected_files:
+            messagebox.showwarning("Uyarı", "Dosya seçiniz.")
+            return
+
+        self.start_btn.configure(state="disabled", text="Başlatılıyor...")
+        threading.Thread(target=self._sharing_thread, daemon=True).start()
+
     def _sharing_thread(self):
-        """Paylaşım thread'i"""
         try:
-            # Dosyaları set et
             set_shared_files(self.selected_files)
             
-            # Server başlat
             self.server_thread = threading.Thread(target=run_server, daemon=True)
             self.server_thread.start()
+            time.sleep(1)
             
-            time.sleep(1)  # Server'ın başlaması için bekle
-            
-            # Tunnel başlat
             self.tunnel_manager = TunnelManager()
             url = self.tunnel_manager.start()
             
-            # UI'ı güncelle
-            self.root.after(0, self._on_sharing_started, url)
-            
+            self.after(0, self._on_sharing_started, url)
         except Exception as e:
-            self.root.after(0, self._on_sharing_error, str(e))
-    
-    def _on_sharing_started(self, url: str):
-        """Paylaşım başarıyla başladı"""
-        self.start_btn.configure(state='disabled', text="✅ Paylaşım Aktif")
-        
-        # URL göster
-        self.url_entry.configure(state='normal')
-        self.url_entry.delete(0, 'end')
-        self.url_entry.insert(0, url)
-        self.url_entry.configure(state='readonly')
-        self.url_frame.pack(fill='x', pady=10, padx=10)
-        
-        # Clipboard'a kopyala
-        self.root.clipboard_clear()
-        self.root.clipboard_append(url)
-        
-        # Progress
-        total_size = calculate_total_size(self.selected_files)
-        # self.progress_label'ı kaldırdık, yerine metrics_frame kullanıyoruz
-        
-        # Stop button göster
-        self.stop_btn.pack(pady=10, padx=10, fill='x')
-        
-        # Start metrics loop
-        self.is_sharing = True
-        self.sender_metrics_frame.pack(pady=5, padx=10, fill='x')
-        self.update_sender_stats()
-        
-        messagebox.showinfo("Başarılı", f"Paylaşım başladı!\n\nURL: {url}\n\nURL otomatik olarak panoya kopyalandı.")
+            self.after(0, self._on_sharing_error, str(e))
 
-    def update_sender_stats(self):
-        """Gönderen istatistiklerini güncelle"""
+    def _on_sharing_started(self, url):
+        self.start_btn.configure(state="disabled", text="✅ Paylaşılıyor")
+        self.sharing_info_frame.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 20))
+        
+        self.url_entry.configure(state="normal")
+        self.url_entry.delete(0, "end")
+        self.url_entry.insert(0, url)
+        self.url_entry.configure(state="readonly")
+        
+        self.clipboard_clear()
+        self.clipboard_append(url)
+        messagebox.showinfo("Başarılı", f"Link kopyalandı!\n{url}")
+        
+        self.is_sharing = True
+        self.update_stats()
+
+    def _on_sharing_error(self, err):
+        self.start_btn.configure(state="normal", text="🚀 Paylaş")
+        messagebox.showerror("Hata", str(err))
+
+    def update_stats(self):
         if not self.is_sharing:
             return
             
         stats = transfer_monitor.get_stats()
+        text = f"Hız: {format_speed(stats['speed'])} | Gönderilen: {format_size(stats['total_sent'])} | Aktif: {stats['active']}"
+        self.stats_label.configure(text=text)
         
-        # Format stats
-        speed_str = format_speed(stats['speed'])
-        total_sent_str = format_size(stats['total_sent'])
-        eta_str = format_time(stats['eta'])
-        active_str = f"{stats['active']} aktif transfer"
+        # Update Connection Status
+        if stats['active'] > 0:
+            self.status_label.configure(text="🟢 Aktif Transfer", text_color="#06A77D")
+        else:
+            self.status_label.configure(text="🟡 Beklemede", text_color="#F7D358")
+            
+        # Update File Progress
+        if 'files' in stats:
+            for filename, data in stats['files'].items():
+                if filename in self.file_progress_labels:
+                    pct = (data['sent'] / data['size'] * 100) if data['size'] > 0 else 0
+                    self.file_progress_labels[filename].configure(text=f"%{pct:.0f}")
         
-        # Update labels (Artık ETA da var)
-        self.sender_speed_label.configure(text=f"📤 Hız: {speed_str} | Kalan: {eta_str}")
-        self.sender_total_label.configure(text=f"Gönderilen: {total_sent_str} | {active_str}")
-        
-        # Schedule next update (1s)
-        self.root.after(1000, self.update_sender_stats)
-    
-    def _on_sharing_error(self, error: str):
-        """Paylaşım hatası"""
-        self.start_btn.configure(state='normal', text="🚀 Paylaşmaya Başla")
-        messagebox.showerror("Hata", f"Paylaşım başlatılamadı:\n{error}")
-    
-    def copy_url_to_clipboard(self):
-        """URL'i panoya kopyala"""
-        url = self.url_entry.get()
-        if url:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(url)
-            messagebox.showinfo("Kopyalandı", "URL panoya kopyalandı!")
-    
+        self.after(1000, self.update_stats)
+
     def stop_sharing(self):
-        """Paylaşımı durdur"""
         if self.tunnel_manager:
             self.tunnel_manager.stop()
-            self.tunnel_manager = None
-        
-        self.is_sharing = False  # Stop metrics loop
-        self.url_frame.pack_forget()
-        self.stop_btn.pack_forget()
-        self.sender_metrics_frame.pack_forget()
-        self.start_btn.configure(state='normal', text="🚀 Paylaşmaya Başla")
-        
-        messagebox.showinfo("Durduruldu", "Paylaşım durduruldu")
+        self.tunnel_manager = None
+        self.is_sharing = False
+        self.sharing_info_frame.grid_remove()
+        self.start_btn.configure(state="normal", text="🚀 Paylaş")
+
+    def copy_url(self):
+        url = self.url_entry.get()
+        if url:
+            self.clipboard_clear()
+            self.clipboard_append(url)
+
+    # --- RECEIVE LOGIC ---
     
-    # RECEIVER METHODS
     def connect_to_url(self):
-        """URL'e bağlan"""
         url = self.url_input.get().strip()
-        
-        if not url:
-            messagebox.showwarning("Uyarı", "Lütfen bir URL girin")
-            return
-        
-        if not validate_url(url):
-            messagebox.showwarning("Uyarı", "Geçersiz URL formatı")
-            return
+        if not url: return
         
         self.download_url = url
-        self.connect_btn.configure(state='disabled', text="Bağlanıyor...")
-        
-        thread = threading.Thread(target=self._connect_thread, daemon=True)
-        thread.start()
-    
+        self.connect_btn.configure(state="disabled", text="...")
+        threading.Thread(target=self._connect_thread, daemon=True).start()
+
     def _connect_thread(self):
-        """Bağlantı thread'i"""
         try:
-            self.downloader = Downloader()
-            self.remote_files = self.downloader.get_file_list(self.download_url)
-            
-            self.root.after(0, self._on_connected)
-            
+            proxies = None
+            if self.use_high_speed:
+                proxies = {
+                    "http": "socks5h://localhost:1055",
+                    "https": "socks5h://localhost:1055"
+                }
+
+            self.downloader = Downloader(proxies=proxies)
+            files = self.downloader.get_file_list(self.download_url)
+            self.remote_files = files
+            self.after(0, self._on_connected)
         except Exception as e:
-            self.root.after(0, self._on_connect_error, str(e))
-    
+            self.after(0, lambda: messagebox.showerror("Hata", str(e)))
+            self.after(0, lambda: self.connect_btn.configure(state="normal", text="Bağlan"))
+
     def _on_connected(self):
-        """Bağlantı başarılı"""
-        self.connect_btn.configure(state='normal', text="🔗 Bağlan")
+        self.connect_btn.configure(state="normal", text="Bağlan")
         
-        # Dosya listesi textbox'u güncelle
-        self.remote_file_textbox.configure(state='normal')
-        self.remote_file_textbox.delete('0.0', 'end')
+        # Status Update
+        self.status_label.configure(text="🟢 Bağlandı", text_color="#06A77D")
         
-        total_size = 0
-        file_count = len(self.remote_files)
+        self.remote_files_frame.pack(fill="both", padx=20, pady=10)
         
-        for i, file in enumerate(self.remote_files):
-            size_str = format_size(file['size'])
-            line = f"{file['name']} ({size_str})"
-            if i < file_count - 1:
-                line += "\n"
-            self.remote_file_textbox.insert('end', line)
-            total_size += file['size']
-        
-        self.remote_file_textbox.configure(state='disabled')
-        
-        # Dosya bilgisi
-        self.file_info_label.configure(text=f"📊 {file_count} dosya | Toplam: {format_size(total_size)}")
-        
-        # Frame'leri göster
-        self.file_list_frame.pack(fill='both', pady=5, padx=10)
-        self.download_btn.pack(pady=10, padx=10, fill='x')
-        
-        messagebox.showinfo(
-            "Bağlantı Başarılı",
-            f"{file_count} dosya bulundu\nToplam boyut: {format_size(total_size)}"
-        )
-    
-    def _on_connect_error(self, error: str):
-        """Bağlantı hatası"""
-        self.connect_btn.configure(state='normal', text="🔗 Bağlan")
-        messagebox.showerror("Hata", f"Bağlantı hatası:\n{error}")
-    
+        self.remote_files_tb.configure(state="normal")
+        self.remote_files_tb.delete("0.0", "end")
+        for f in self.remote_files:
+            self.remote_files_tb.insert("end", f"{f['name']} ({format_size(f['size'])})\n")
+        self.remote_files_tb.configure(state="disabled")
+
     def start_download(self):
-        """İndirmeyi başlat"""
-        if not self.remote_files:
-            return
+        save_path = filedialog.askdirectory()
+        if not save_path: return
         
-        # Kayıt yeri seç
-        save_path = filedialog.askdirectory(title="İndirme Klasörü Seçin")
-        if not save_path:
-            return
+        self.download_btn.configure(state="disabled", text="İndiriliyor...")
+        # self.progress_frame.pack(fill="x", padx=20, pady=10) # Persistent now
+        self.progress_label.configure(text="İndirme Başlıyor...")
         
-        self.download_btn.configure(state='disabled', text="İndiriliyor...")
-        self.receive_progress_label.configure(text="İndirme başlıyor...")
-        
-        thread = threading.Thread(
-            target=self._download_thread,
-            args=(save_path,),
-            daemon=True
-        )
-        thread.start()
-    
-    def _download_thread(self, save_path: str):
-        """İndirme thread'i"""
-        try:
-            # İlk olarak dosya sayısını göster
-            total_files = len(self.remote_files)
-            current_file = [0]  # Mutable counter
-            
-            def progress_callback(downloaded, total, speed, current_file=0, total_files=0):
-                percent = (downloaded / total * 100) if total > 0 else 0
-                eta = (total - downloaded) / speed if speed > 0 else 0
-                
-                # Progress bar güncelle
-                self.root.after(0, self.receive_progress_bar.set, percent / 100)
-                
-                # File count info
-                file_info = f"Dosya {current_file}/{total_files} | " if total_files > 0 else ""
-                
-                # Ana metrik (büyük ve belirgin)
-                main_text = f"📥 {file_info}%{percent:.1f} | {format_speed(speed)} | Kalan: {format_time(eta)}"
-                
-                # Detaylı bilgi
-                detail_text = f"İndirilen: {format_size(downloaded)} / {format_size(total)}"
-                
-                self.root.after(0, self.receive_progress_label.configure, {"text": main_text})
-                self.root.after(0, self.receive_detail_label.configure, {"text": detail_text})
-            
-            # Progress container'ı göster
-            self.root.after(0, self.receive_progress_container.pack, {"fill": 'x', "pady": 10, "padx": 10})
-            
-            self.downloader.download_all(self.download_url, save_path, progress_callback)
-            
-            self.root.after(0, self._on_download_complete, save_path)
-            
-        except Exception as e:
-            self.root.after(0, self._on_download_error, str(e))
-    
-    def _on_download_complete(self, save_path: str):
-        """İndirme tamamlandı"""
-        self.download_btn.configure(state='normal', text="📦 Tümünü İndir")
-        self.receive_progress_bar.set(1.0)
-        self.receive_progress_label.configure(text="✅ İndirme Tamamlandı!", text_color="#90EE90")
-        
-        # Detaylı özet
-        total_files = len(self.remote_files)
-        total_size = sum(f['size'] for f in self.remote_files)
-        
-        summary = f"🎉 İşlem Tamamlandı!\n\n" \
-                  f"📂 Dosya Sayısı: {total_files}\n" \
-                  f"💾 Toplam Boyut: {format_size(total_size)}\n" \
-                  f"📁 Kayıt Yeri:\n{save_path}"
-        
-        self.receive_detail_label.configure(text=f"Toplam: {format_size(total_size)} - Başarıyla kaydedildi.")
-        
-        messagebox.showinfo("İndirme Başarılı", summary)
-        
-        # Klasörü açmayı dene
-        try:
-            os.startfile(save_path)
-        except:
-            pass
-    
-    def _on_download_error(self, error: str):
-        """İndirme hatası"""
-        self.download_btn.configure(state='normal', text="📦 Tümünü İndir")
-        # Container'ı hemen gizleme, hatayı görsünler
-        # self.receive_progress_container.pack_forget()
-        
-        err_msg = str(error)
-        friendly_msg = f"❌ Hata Oluştu\n\n{err_msg}"
-        
-        if "timed out" in err_msg.lower():
-            friendly_msg = "⚠️ Zaman Aşımı (Timeout)\n\nİnternet bağlantısı yavaş veya gönderen yanıt vermiyor."
-        elif "connection" in err_msg.lower():
-            friendly_msg = "⚠️ Bağlantı Hatası\n\nSunucuya ulaşılamıyor. Gönderen programı kapatmış olabilir."
-            
-        # Kullanıcıya ZIP seçeneği sun
-        if messagebox.askyesno("İndirme Hatası", f"{friendly_msg}\n\nDosyaları tek bir ZIP paketi olarak indirmeyi denemek ister misiniz? (Bu yöntem daha garantilidir)"):
-            self.start_zip_download()
-        else:
-            messagebox.showerror("İndirme Hatası", friendly_msg)
-            self.receive_progress_label.configure(text="❌ İndirme Başarısız", text_color="#ff5555")
+        threading.Thread(target=self._download_thread, args=(save_path,), daemon=True).start()
 
-    def start_zip_download(self):
-        """ZIP olarak indirmeyi başlat"""
-        if not self.remote_files:
-            return
-        
-        # Kayıt yeri seç
-        save_path = filedialog.askdirectory(title="ZIP Dosyasını Kaydetmek İçin Klasör Seçin")
-        if not save_path:
-            return
-        
-        self.download_btn.configure(state='disabled', text="ZIP İndiriliyor...")
-        self.receive_progress_label.configure(text="ZIP paketi hazırlanıyor...", text_color="white")
-        # Container'ı göster (eğer gizlendiyse)
-        self.receive_progress_container.pack(fill='x', pady=10, padx=10)
-        
-        thread = threading.Thread(
-            target=self._download_zip_thread,
-            args=(save_path,),
-            daemon=True
-        )
-        thread.start()
 
-    def _download_zip_thread(self, save_path: str):
-        """ZIP indirme thread'i"""
-        try:
-            total_size = sum(f['size'] for f in self.remote_files)
-            
-            def progress_callback(downloaded, total, speed):
-                # ZIP indirmede total size tam bilinmeyebilir (chunked encoding),
-                # ama yaklaşık olarak dosyaların toplam boyutu kadardır.
-                est_total = total_size if total <= 0 else total
-                percent = (downloaded / est_total * 100) if est_total > 0 else 0
-                
-                # Progress bar güncelle
-                self.root.after(0, self.receive_progress_bar.set, percent / 100)
-                
-                main_text = f"📦 ZIP İndiriliyor... %{percent:.1f} | {format_speed(speed)}"
-                detail_text = f"İndirilen: {format_size(downloaded)}"
-                
-                self.root.after(0, self.receive_progress_label.configure, {"text": main_text})
-                self.root.after(0, self.receive_detail_label.configure, {"text": detail_text})
-            
-            self.downloader.download_all_as_zip(self.download_url, save_path, progress_callback)
-            
-            self.root.after(0, self._on_download_complete, save_path)
-            
-        except Exception as e:
-            # Burası da patlarsa artık yapacak bir şey yok, sadece hata göster
-            error_msg = str(e)
-            self.root.after(0, lambda: messagebox.showerror("ZIP Hatası", f"ZIP indirme de başarısız oldu:\n{error_msg}"))
-            self.root.after(0, lambda: self.download_btn.configure(state='normal', text="📦 Tümünü İndir"))
 
+    def update_progress(self, pct, speed, current, total):
+        self.progress_bar.set(pct / 100)
+        self.progress_label.configure(text=f"Dosya {current}/{total} - %{pct:.1f} ({format_speed(speed)})")
+
+    def _on_download_complete(self, path):
+        messagebox.showinfo("Tamamlandı", f"Dosyalar indirildi:\n{path}")
+        self._reset_download_ui()
+        try: os.startfile(path)
+        except: pass
+
+    def _reset_download_ui(self):
+        self.download_btn.configure(state="normal", text="📥 İndir")
+        # self.progress_frame.pack_forget() # Keep visible
+        self.progress_label.configure(text="Hazır - İndirme Bekleniyor")
+        self.progress_bar.set(0)
 
 if __name__ == "__main__":
     app = QuickShareApp()
-    app.run()
+    app.mainloop()

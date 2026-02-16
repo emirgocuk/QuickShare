@@ -4,7 +4,27 @@ Yardımcı fonksiyonlar
 """
 
 import os
+import hashlib
 from typing import List, Dict
+
+
+def calculate_file_hash(filepath: str, chunk_size: int = 8192) -> str:
+    """
+    Dosyanın SHA256 hash'ini hesapla
+    
+    Args:
+        filepath: Dosya yolu
+        chunk_size: Okuma buffer boyutu
+        
+    Returns:
+        Hex digest string
+    """
+    sha256_hash = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        # Read the file in chunks to avoid using too much memory
+        for byte_block in iter(lambda: f.read(chunk_size), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
 
 
 def format_size(bytes_count: int) -> str:
