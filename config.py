@@ -21,6 +21,15 @@ MAX_RETRIES = 5                    # connection retry sayısı (artırıldı)
 CLOUDFLARED_BINARY = "bin/cloudflared.exe"
 CLOUDFLARED_STARTUP_TIMEOUT = 30   # Tunnel URL alınana kadar max bekleme (saniye)
 
+# WebRTC P2P Ayarları
+WEBRTC_CHUNK_SIZE = 64 * 1024  # 64KB per DataChannel message
+ICE_SERVERS = [
+    {"urls": "stun:stun.l.google.com:19302"},
+    {"urls": "stun:stun1.l.google.com:19302"},
+    {"urls": "stun:stun.cloudflare.com:3478"},
+]
+WEBRTC_TIMEOUT = 15  # P2P bağlantı kurulma süresi (saniye)
+
 # GUI Ayarları
 WINDOW_WIDTH = 650
 WINDOW_HEIGHT = 650

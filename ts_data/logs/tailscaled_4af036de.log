@@ -1,0 +1,397 @@
+TPM: successfully read all properties
+logtail started
+local disk logdir: C:\ProgramData\Tailscale\Logs
+Program starting: v1.94.2-t0a29cf18b-g3f044c9f6, Go 1.25.5: []string{"D:\\Projects\\playroom\\FileShareProgram\\quickshare\\bin\\tailscaled.exe", "--tun=userspace-networking", "--socket=\\\\.\\pipe\\quickshare-4af036de", "--statedir=D:\\Projects\\playroom\\FileShareProgram\\quickshare\\ts_data", "--socks5-server=localhost:1055"}
+cleaning log files; number of files 51 > 50
+cleaned log file C:\ProgramData\Tailscale\Logs\tailscale-service-20260216T012730-1771194450.txt (size 1030); new bytes=53711, files=50
+LogID: 283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0
+logpolicy: using dir C:\ProgramData\Tailscale
+dns: using *dns.windowsManager
+running ipconfig /registerdns ...
+wgengine.NewUserspaceEngine(tun "userspace-networking") ...
+dns: using dns.noopManager
+link state: interfaces.State{defaultRoute=Wi-Fi (Intel(R) Wi-Fi 6E AX211 160MHz) ifs={Wi-Fi:[192.168.0.17/24 llu6]} v4=true v6=false}
+magicsock: disco key = d:0d77a94a769d6e56
+Creating WireGuard device...
+Bringing WireGuard device up...
+Bringing router up...
+Clearing router settings...
+Starting network monitor...
+Engine created.
+logpolicy: using dir C:\ProgramData\Tailscale
+linkChange: in state NoState; PAC or proxyConfig changed; updating routes
+got LocalBackend in 22ms
+Start
+desktop-sessions: registered for session notifications
+ipnext: active extensions: conn25, portlist, posture, clientupdate, relayserver, taildrop, auditlog, desktop-sessions
+Start: serverMode=false
+auditlog: created
+auditlog: [unexpected] failed to restore logs: empty key
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+Switching ipn state NoState -> NeedsLogin (WantRunning=false, nm=false)
+blockEngineUpdates(true)
+health(warnable=wantrunning-false): error: Tailscale is stopped.
+wgengine: Reconfig: configuring userspace WireGuard config (with 0/0 peers)
+wgengine: Reconfig: configuring router
+wgengine: Reconfig: user dialer
+wgengine: Reconfig: configuring DNS
+dns: Set: {DefaultResolvers:[] Routes:{} SearchDomains:[] Hosts:0}
+dns: Resolvercfg: {Routes:{} Hosts:0 LocalDomains:[]}
+dns: OScfg: {}
+WSL: found 2 distributions
+socks5: client connection failed: could not read packet header
+pm: failed to migrate from legacy preferences: load legacy prefs: profile migration already completed
+client connected (DESKTOP-OHRG68F\Emir): disconnecting Tailscale
+control: client.Shutdown ...
+Switching ipn state NeedsLogin -> NoState (WantRunning=false, nm=false)
+control: updateRoutine: exiting
+health(warnable=wantrunning-false): error: Tailscale is stopped.
+auditlog: stopped for profileID: 
+control: authRoutine: exiting
+control: mapRoutine: exiting
+Reconfig(down): no changes made to Engine config
+Start
+control: Client.Shutdown done.
+Start: serverMode=false
+auditlog: created
+auditlog: [unexpected] failed to restore logs: empty key
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+Switching ipn state NoState -> NeedsLogin (WantRunning=false, nm=false)
+blockEngineUpdates(true)
+Reconfig(down): no changes made to Engine config
+health(warnable=wantrunning-false): error: Tailscale is stopped.
+client disconnected (DESKTOP-OHRG68F\Emir): disconnecting Tailscale
+Switching ipn state NeedsLogin -> NoState (WantRunning=false, nm=false)
+health(warnable=wantrunning-false): error: Tailscale is stopped.
+control: client.Shutdown ...
+Reconfig(down): no changes made to Engine config
+Start
+auditlog: stopped for profileID: 
+control: authRoutine: exiting
+control: mapRoutine: exiting
+control: updateRoutine: exiting
+control: Client.Shutdown done.
+Start: serverMode=false
+auditlog: created
+auditlog: [unexpected] failed to restore logs: empty key
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+Switching ipn state NoState -> NeedsLogin (WantRunning=false, nm=false)
+[RATELIMIT] format("Switching ipn state %v -> %v (WantRunning=%v, nm=%v)")
+blockEngineUpdates(true)
+Reconfig(down): no changes made to Engine config
+health(warnable=wantrunning-false): error: Tailscale is stopped.
+[RATELIMIT] format("health(warnable=%s): error: %s")
+pm: failed to migrate from legacy preferences: load legacy prefs: profile migration already completed
+client connected (DESKTOP-OHRG68F\Emir): disconnecting Tailscale
+control: client.Shutdown ...
+Reconfig(down): no changes made to Engine config
+[RATELIMIT] format("Reconfig(down): %v")
+control: authRoutine: exiting
+auditlog: stopped for profileID: 
+control: updateRoutine: exiting
+control: mapRoutine: exiting
+control: Client.Shutdown done.
+Start
+Start: serverMode=false
+auditlog: created
+auditlog: [unexpected] failed to restore logs: empty key
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+blockEngineUpdates(true)
+client disconnected (DESKTOP-OHRG68F\Emir): disconnecting Tailscale
+control: client.Shutdown ...
+auditlog: stopped for profileID: 
+control: authRoutine: exiting
+Start
+[RATELIMIT] format("Start")
+control: mapRoutine: exiting
+control: updateRoutine: exiting
+[RATELIMIT] format("[v\x00JSON]%d%s")
+Start: serverMode=false
+[RATELIMIT] format("Start: serverMode=%v")
+control: Client.Shutdown done.
+auditlog: created
+[RATELIMIT] format("auditlog: created")
+auditlog: [unexpected] failed to restore logs: empty key
+[RATELIMIT] format("auditlog: [unexpected] failed to restore logs: %v")
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+[RATELIMIT] format("Backend: logs: be:%v fe:%v")
+blockEngineUpdates(true)
+[RATELIMIT] format("blockEngineUpdates(%v)")
+pm: failed to migrate from legacy preferences: load legacy prefs: profile migration already completed
+client connected (DESKTOP-OHRG68F\Emir): disconnecting Tailscale
+[RATELIMIT] format("%s: disconnecting Tailscale")
+control: client.Shutdown ...
+[RATELIMIT] format("control: client.Shutdown ...")
+auditlog: stopped for profileID: 
+[RATELIMIT] format("auditlog: stopped for profileID: %v")
+control: updateRoutine: exiting
+[RATELIMIT] format("control: updateRoutine: exiting")
+control: mapRoutine: exiting
+[RATELIMIT] format("control: mapRoutine: exiting")
+control: authRoutine: exiting
+[RATELIMIT] format("control: authRoutine: exiting")
+control: Client.Shutdown done.
+[RATELIMIT] format("control: Client.Shutdown done.")
+localapi: [POST] /localapi/v0/check-prefs
+localapi: [POST] /localapi/v0/start
+Start: updated prefs: Prefs{ra=true dns=true want=true statefulFiltering=false host="quickshare-app" update=check Persist=nil}, reason: [opts.UpdatePrefs]
+generating new machine key
+machine key written to store
+health(warnable=wantrunning-false): ok
+localapi: [POST] /localapi/v0/login-interactive
+StartLoginInteractiveAs("DESKTOP-OHRG68F\\Emir"): url=false
+control: client.Login(2)
+control: LoginInteractive -> regen=true
+control: doLogin(regen=true, hasUrl=false)
+control: control server key from https://controlplane.tailscale.com: ts2021=[fSeS+], legacy=[nlFWp]
+control: Generating a new nodekey.
+control: RegisterReq: onode= node=[sAoPq] fup=false nks=false
+ran ipconfig /registerdns in 3.046s
+running ipconfig /flushdns ...
+ran ipconfig /flushdns in 35ms
+control: RegisterReq: got response; nodeKeyExpired=false, machineAuthorized=false; authURL=true
+control: AuthURL is https://login.tailscale.com/a/fb1dada018621
+control: doLogin(regen=false, hasUrl=true)
+control: RegisterReq: onode= node=[sAoPq] fup=true nks=false
+Received auth URL: https://login.tailsc...
+popBrowserAuthNow("DESKTOP-OHRG68F\\Emir"): url=true, key-expired=false, seamless-key-renewal=false
+stopEngineAndWait...
+stopEngineAndWait: done.
+health(warnable=warming-up): ok
+[RATELIMIT] format("health(warnable=%s): error: %s") (7 dropped)
+health(warnable=login-state): error: You are logged out. The last login error was: register request: http 410: auth path not found
+Received error: register request: http 410: auth path not found
+control: doLogin(regen=false, hasUrl=true)
+control: RegisterReq: onode= node=[sAoPq] fup=true nks=false
+control: RegisterReq: got response; nodeKeyExpired=false, machineAuthorized=true; authURL=false
+[RATELIMIT] format("blockEngineUpdates(%v)") (3 dropped)
+blockEngineUpdates(false)
+health(warnable=login-state): ok
+health(warnable=not-in-map-poll): ok
+control: netmap: got new dial plan from control
+using tailnet default auto-update setting: false
+EditPrefs: MaskedPrefs{AutoUpdate={Apply=false}}
+active login: emrggck@gmail.com
+[RATELIMIT] format("Switching ipn state %v -> %v (WantRunning=%v, nm=%v)") (7 dropped)
+Switching ipn state NeedsLogin -> Starting (WantRunning=true, nm=true)
+tstun: peer config: peerConfigTable{nativeAddr4: 100.110.200.69, nativeAddr6: fd7a:115c:a1e0::a37:c845, }
+magicsock: SetPrivateKey called (init)
+wgengine: Reconfig: configuring userspace WireGuard config (with 0/1 peers)
+wgengine: Reconfig: configuring router
+wgengine: Reconfig: user dialer
+tsdial: bart table size: 4
+wgengine: Reconfig: configuring DNS
+dns: Set: {DefaultResolvers:[1.1.1.1 1.0.0.1 2606:4700:4700::1111 2606:4700:4700::1001] Routes:{tail51636.ts.net.:[] ts.net.:[199.247.155.53 2620:111:8007::53]}+65arpa SearchDomains:[tail51636.ts.net.] Hosts:3}
+dns: Resolvercfg: {Routes:{.:[1.1.1.1 1.0.0.1 2606:4700:4700::1111 2606:4700:4700::1001] ts.net.:[199.247.155.53 2620:111:8007::53]} Hosts:3 LocalDomains:[tail51636.ts.net.]+65arpa}
+dns: OScfg: {Hosts:[0xc0004119e0 0xc0004119b0] Nameservers:[100.100.100.100] SearchDomains:[tail51636.ts.net.] }
+peerapi: serving on http://100.110.200.69:55137
+peerapi: serving on http://[fd7a:115c:a1e0::a37:c845]:55137
+monitor: gateway and self IP changed: gw=192.168.0.1 self=192.168.0.17
+netcheck: DetectCaptivePortal(found=false)
+magicsock: home DERP changing from derp-0 [0ms] to derp-4 [69ms]
+magicsock: home is now derp-4 (fra)
+health(warnable=no-derp-home): ok
+magicsock: adding connection to derp-4 for home-keep-alive
+magicsock: 1 active derp conns: derp-4=cr0s,wr0s
+control: NetInfo: NetInfo{varies=false ipv6=false ipv6os=true udp=true icmpv4=false derp=#4 portmap= link="" firewallmode=""}
+derphttp.Client.Connect: connecting to derp-4 (fra)
+Switching ipn state Starting -> Running (WantRunning=true, nm=true)
+client disconnected (DESKTOP-OHRG68F\Emir): disconnecting Tailscale
+active login: 
+[RATELIMIT] format("control: client.Shutdown ...") (1 dropped)
+control: client.Shutdown ...
+[RATELIMIT] format("auditlog: stopped for profileID: %v") (1 dropped)
+auditlog: stopped for profileID: b460
+[RATELIMIT] format("control: authRoutine: exiting") (1 dropped)
+control: authRoutine: exiting
+[RATELIMIT] format("control: updateRoutine: exiting") (1 dropped)
+control: updateRoutine: exiting
+[RATELIMIT] format("control: mapRoutine: exiting") (1 dropped)
+control: mapRoutine: exiting
+Switching ipn state Running -> NoState (WantRunning=false, nm=false)
+health(warnable=wantrunning-false): error: Tailscale is stopped.
+[RATELIMIT] format("control: Client.Shutdown done.") (1 dropped)
+control: Client.Shutdown done.
+tstun: peer config: peerConfigTable(nil)
+magicsock: SetPrivateKey called (zeroed)
+magicsock: closing connection to derp-4 (zero-private-key), age 0s
+magicsock: 0 active derp conns
+wgengine: Reconfig: configuring userspace WireGuard config (with 0/0 peers)
+wgengine: Reconfig: configuring router
+wgengine: Reconfig: user dialer
+wgengine: Reconfig: configuring DNS
+dns: Set: {DefaultResolvers:[] Routes:{} SearchDomains:[] Hosts:0}
+dns: Resolvercfg: {Routes:{} Hosts:0 LocalDomains:[]}
+dns: OScfg: {}
+[RATELIMIT] format("Start") (2 dropped)
+Start
+[RATELIMIT] format("[v\x00JSON]%d%s") (2 dropped)
+[RATELIMIT] format("Start: serverMode=%v") (2 dropped)
+Start: serverMode=false
+[RATELIMIT] format("auditlog: created") (2 dropped)
+auditlog: created
+[RATELIMIT] format("auditlog: [unexpected] failed to restore logs: %v") (2 dropped)
+auditlog: [unexpected] failed to restore logs: empty key
+[RATELIMIT] format("Backend: logs: be:%v fe:%v") (2 dropped)
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+Switching ipn state NoState -> NeedsLogin (WantRunning=false, nm=false)
+blockEngineUpdates(true)
+[RATELIMIT] format("Reconfig(down): %v") (6 dropped)
+Reconfig(down): no changes made to Engine config
+pm: using backend prefs for "profile-b460": Prefs{ra=true dns=true want=true statefulFiltering=false host="quickshare-app" update=check Persist{o=, n=[sAoPq] u="emrggck@gmail.com" ak=-}}
+client connected (DESKTOP-OHRG68F\Emir): switching to profile "emrggck@gmail.com" (b460)
+control: client.Shutdown ...
+auditlog: stopped for profileID: 
+Switching ipn state NeedsLogin -> NoState (WantRunning=true, nm=false)
+[RATELIMIT] format("Switching ipn state %v -> %v (WantRunning=%v, nm=%v)")
+Reconfig(down): no changes made to Engine config
+Start
+control: authRoutine: exiting
+Start: serverMode=false
+auditlog: created
+control: updateRoutine: exiting
+control: mapRoutine: exiting
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+control: Client.Shutdown done.
+control: client.Login(0)
+health(warnable=no-derp-connection): ok
+control: doLogin(regen=false, hasUrl=false)
+client disconnected (DESKTOP-OHRG68F\Emir): disconnecting Tailscale
+control: client.Shutdown ...
+auditlog: stopped for profileID: b460
+tshttpproxy: winhttp: GetProxyForURL("https://controlplane.tailscale.com/key?v=131"): timeout; using cached proxy <nil>
+control: updateRoutine: exiting
+control: mapRoutine: exiting
+Start
+control: authRoutine: exiting
+Start: serverMode=false
+control: Client.Shutdown done.
+auditlog: created
+auditlog: [unexpected] failed to restore logs: empty key
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+blockEngineUpdates(true)
+Reconfig(down): no changes made to Engine config
+health(warnable=no-derp-connection): ok
+health(warnable=wantrunning-false): error: Tailscale is stopped.
+health(warnable=no-derp-connection): ok
+[RATELIMIT] format("health(warnable=%s): ok")
+health(warnable=warming-up): error: Tailscale is starting. Please wait.
+health(warnable=wantrunning-false): error: Tailscale is stopped.
+[RATELIMIT] format("health(warnable=%s): error: %s")
+tshttpproxy: winhttp: context canceled, ignoring GetProxyForURL("https://controlplane.tailscale.com/key?v=131") after 1ms
+magicsock: endpoints changed: 46.197.28.102:10324 (stun), 192.168.0.17:41641 (local)
+pm: using backend prefs for "profile-b460": Prefs{ra=true dns=true want=true statefulFiltering=false host="quickshare-app" update=check Persist{o=, n=[sAoPq] u="emrggck@gmail.com" ak=-}}
+client connected (DESKTOP-OHRG68F\Emir): switching to profile "emrggck@gmail.com" (b460)
+control: client.Shutdown ...
+auditlog: stopped for profileID: 
+control: updateRoutine: exiting
+control: authRoutine: exiting
+control: mapRoutine: exiting
+control: Client.Shutdown done.
+Reconfig(down): no changes made to Engine config
+Start
+Start: serverMode=false
+auditlog: created
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+control: client.Login(0)
+control: doLogin(regen=false, hasUrl=false)
+client disconnected (DESKTOP-OHRG68F\Emir): disconnecting Tailscale
+control: client.Shutdown ...
+[RATELIMIT] format("control: client.Shutdown ...")
+Start
+auditlog: stopped for profileID: b460
+[RATELIMIT] format("auditlog: stopped for profileID: %v")
+control: mapRoutine: exiting
+[RATELIMIT] format("control: mapRoutine: exiting")
+control: updateRoutine: exiting
+[RATELIMIT] format("control: updateRoutine: exiting")
+control: authRoutine: exiting
+[RATELIMIT] format("control: authRoutine: exiting")
+control: Client.Shutdown done.
+[RATELIMIT] format("control: Client.Shutdown done.")
+Start: serverMode=false
+auditlog: created
+auditlog: [unexpected] failed to restore logs: empty key
+Backend: logs: be:283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0 fe:
+blockEngineUpdates(true)
+Reconfig(down): no changes made to Engine config
+[RATELIMIT] format("Reconfig(down): %v")
+[RATELIMIT] format("health(warnable=%s): error: %s") (3 dropped)
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+[RATELIMIT] format("health(warnable=%s): ok") (22 dropped)
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.
+health(warnable=no-derp-connection): ok
+health(warnable=no-derp-connection): error: Tailscale could not connect to the 'Frankfurt' relay server. Your Internet connection might be down, or the server might be temporarily unavailable.

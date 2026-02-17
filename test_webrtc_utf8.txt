@@ -1,0 +1,63 @@
+﻿==================================================
+WebRTC P2P Loopback Test
+==================================================
+python : Traceback (m
+ost recent call last)
+:
+At line:1 char:1
++ python test_webrtc.
+py > test_webrtc_outp
+ut.txt 2>&1; [IO.File
+]::Write ...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (Traceba   
+ ck (most recent     
+call last)::Stri    n
+g) [], RemoteEx    ce
+ption
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+  File "D:\Projects\p
+layroom\FileShareProg
+ram\quickshare\test_w
+ebrtc.py", line 169, 
+in <module>
+    success = test_p2
+p_transfer()
+  File "D:\Projects\p
+layroom\FileShareProg
+ram\quickshare\test_w
+ebrtc.py", line 36, i
+n test_p2p_transfer
+    print(f"\n\u2705 
+Test file created: {t
+est_file}")
+    ~~~~~^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+  File "C:\Users\Emir
+\AppData\Local\Progra
+ms\Python\Python313\L
+ib\encodings\cp1254.p
+y", line 19, in encod
+e
+    return codecs.cha
+rmap_encode(input,sel
+f.errors,encoding_tab
+le)[0]
+           ~~~~~~~~~~
+~~~~~~~~~~~^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+^^^
+UnicodeEncodeError: '
+charmap' codec can't 
+encode character '\u2
+705' in position 2: c
+haracter maps to <und
+efined>

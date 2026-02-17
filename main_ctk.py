@@ -18,13 +18,13 @@ from utils import format_size, format_speed, format_time, validate_url, calculat
 from server import set_shared_files, run_server, transfer_monitor
 from tunnel_manager import TunnelManager
 from downloader import Downloader
-from tailscale_manager import TailscaleManager
+from webrtc_manager import WebRTCSender, WebRTCReceiver
 
 # CustomTkinter appearance
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-import atexit
+
 
 class Tk(ctk.CTk, TkinterDnD.DnDWrapper):
     """CustomTkinter + TkinterDnD Wrapper"""
@@ -46,9 +46,8 @@ class QuickShareApp(Tk):
         # State
         self.selected_files: List[str] = []
         self.tunnel_manager: Optional[TunnelManager] = None
-        self.tailscale = TailscaleManager()
-        atexit.register(self.tailscale.cleanup)
-        self.use_high_speed = False
+        self.webrtc_sender: Optional[WebRTCSender] = None
+        self.use_p2p = False
         self.server_thread: Optional[threading.Thread] = None
         self.downloader: Optional[Downloader] = None
         self.download_url: Optional[str] = None
@@ -96,7 +95,7 @@ class QuickShareApp(Tk):
         self.sidebar_button_receive.grid(row=3, column=0, padx=20, pady=10)
         
         # High Speed Toggle
-        self.speed_switch = ctk.CTkSwitch(self.sidebar_frame, text="Hız Modu (VPN)", command=self.toggle_speed_mode)
+        self.speed_switch = ctk.CTkSwitch(self.sidebar_frame, text="⚡ Doğrudan P2P", command=self.toggle_p2p_mode)
         self.speed_switch.grid(row=4, column=0, padx=20, pady=10, sticky="s")
         
         # Settings / Info at bottom
@@ -310,66 +309,19 @@ class QuickShareApp(Tk):
             self.after(0, lambda: self.log_message(f"HATA: {err_msg}"))
             self.after(0, self._reset_download_ui)
 
-    # --- Tailscale Logic ---
+    # --- WebRTC P2P Logic ---
 
-    def toggle_speed_mode(self):
-        """Handle High Speed Switch"""
+    def toggle_p2p_mode(self):
+        """Handle P2P Switch"""
         if self.speed_switch.get() == 1:
-            self.use_high_speed = True
-            self.enable_high_speed()
+            self.use_p2p = True
+            self.status_label.configure(text="🟢 P2P Aktif", text_color="#06A77D")
         else:
-            self.use_high_speed = False
-            self.status_label.configure(text="🔴 VPN Kapalı", text_color="#ff5555")
-            # Disable logic if needed (stop daemon?)
-            # self.tailscale.stop() 
-
-    def enable_high_speed(self):
-        """Start Tailscale Logic"""
-        if not self.tailscale.check_binaries():
-            messagebox.showerror("Hata", "Tailscale dosyaları (bin/tailscaled.exe) bulunamadı!\nLütfen dosyaları indirip 'bin' klasörüne atın.")
-            self.speed_switch.deselect()
-            return
-            
-        self.status_label.configure(text="🟡 VPN Başlatılıyor...", text_color="orange")
-        threading.Thread(target=self._tailscale_thread, daemon=True).start()
-
-    def _tailscale_thread(self):
-        def log_cb(msg):
-            # Log to receiver console if visible, or just print
-            print(f"[VPN] {msg}")
-            # Check for Auth URL
-            if "AUTH REQUIRED" in msg:
-                url = msg.split(": ")[1].strip()
-                self.after(0, lambda: self.show_auth_dialog(url))
-
-        # Start Daemon
-        self.tailscale.start_daemon(log_callback=log_cb)
-        
-        # Wait/Login
-        time.sleep(2)
-        self.tailscale.up()
-        
-        # Serve
-        time.sleep(2)
-        url = self.tailscale.serve(5000)
-        
-        if url:
-             self.after(0, lambda: self._on_vpn_ready(url))
-        else:
-             self.after(0, lambda: self.status_label.configure(text="🔴 VPN Hatası", text_color="red"))
-
-    def show_auth_dialog(self, url):
-        """Show dialog to authenticate"""
-        msg = "Cihazı eşleştirmek için tarayıcıda giriş yapın.\nLink kopyalandı!"
-        messagebox.showinfo("VPN Girişi", msg)
-        self.clipboard_clear()
-        self.clipboard_append(url)
-        webbrowser.open(url)
-
-    def _on_vpn_ready(self, url):
-        self.status_label.configure(text="🟢 VPN Aktif", text_color="#06A77D")
-        self.link_entry.delete(0, "end")
-        self.link_entry.insert(0, url)
+            self.use_p2p = False
+            self.status_label.configure(text="🔴 P2P Kapalı", text_color="#ff5555")
+            if self.webrtc_sender:
+                self.webrtc_sender.stop()
+                self.webrtc_sender = None
 
     def on_drop(self, event):
         """Handle Drag & Drop files"""
@@ -440,6 +392,54 @@ class QuickShareApp(Tk):
         try:
             set_shared_files(self.selected_files)
             
+            # Setup WebRTC sender if P2P is enabled
+            if self.use_p2p:
+                from server import webrtc_sender as _ws
+                import server as srv
+                from utils import create_file_info, get_files_from_directory
+                
+                self.webrtc_sender = WebRTCSender()
+                self.webrtc_sender.start()
+                self.webrtc_sender.log_callback = lambda msg: print(f"[P2P] {msg}")
+                
+                # Feed P2P progress into transfer_monitor for sender stats bar
+                def sender_progress(sent, total, speed, current_file_idx, total_files):
+                    transfer_monitor.total_sent = sent
+                    transfer_monitor.total_size = total
+                    if transfer_monitor.active_transfers == 0:
+                        transfer_monitor.active_transfers = 1
+                    # Update per-file progress
+                    if self.webrtc_sender and self.webrtc_sender.files:
+                        # Calculate how much of the current file has been sent
+                        files = self.webrtc_sender.files
+                        cumulative = 0
+                        for idx, f_info in enumerate(files):
+                            if cumulative + f_info['size'] >= sent:
+                                # This is the file currently being sent
+                                file_sent = sent - cumulative
+                                fname = os.path.basename(f_info['name'])
+                                transfer_monitor.update_file_progress(fname, file_sent, f_info['size'])
+                                break
+                            else:
+                                # This file is complete
+                                fname = os.path.basename(f_info['name'])
+                                transfer_monitor.update_file_progress(fname, f_info['size'], f_info['size'])
+                                cumulative += f_info['size']
+                self.webrtc_sender.progress_callback = sender_progress
+                
+                # Build file list for WebRTC sender
+                file_list = []
+                for path in self.selected_files:
+                    if os.path.isfile(path):
+                        file_list.append({"name": os.path.basename(path), "path": path, "size": os.path.getsize(path)})
+                    elif os.path.isdir(path):
+                        for f in get_files_from_directory(path):
+                            rel = os.path.relpath(f, path)
+                            file_list.append({"name": rel, "path": f, "size": os.path.getsize(f)})
+                
+                self.webrtc_sender.set_files(file_list)
+                srv.webrtc_sender = self.webrtc_sender
+            
             self.server_thread = threading.Thread(target=run_server, daemon=True)
             self.server_thread.start()
             time.sleep(1)
@@ -498,6 +498,12 @@ class QuickShareApp(Tk):
         if self.tunnel_manager:
             self.tunnel_manager.stop()
         self.tunnel_manager = None
+        # Stop WebRTC sender
+        if self.webrtc_sender:
+            self.webrtc_sender.stop()
+            self.webrtc_sender = None
+            import server as srv
+            srv.webrtc_sender = None
         self.is_sharing = False
         self.sharing_info_frame.grid_remove()
         self.start_btn.configure(state="normal", text="🚀 Paylaş")
@@ -520,16 +526,22 @@ class QuickShareApp(Tk):
 
     def _connect_thread(self):
         try:
-            proxies = None
-            if self.use_high_speed:
-                proxies = {
-                    "http": "socks5h://localhost:1055",
-                    "https": "socks5h://localhost:1055"
-                }
-
-            self.downloader = Downloader(proxies=proxies)
+            self.downloader = Downloader()
             files = self.downloader.get_file_list(self.download_url)
             self.remote_files = files
+            
+            # Check if sender supports P2P
+            self._p2p_available = False
+            if self.use_p2p:
+                try:
+                    import requests
+                    resp = requests.get(f"{self.download_url}/rtc/status", timeout=5)
+                    if resp.ok and resp.json().get("p2p"):
+                        self._p2p_available = True
+                        print("[P2P] Gönderen P2P destekliyor!")
+                except:
+                    print("[P2P] P2P durumu kontrol edilemedi, HTTP fallback kullanılacak.")
+            
             self.after(0, self._on_connected)
         except Exception as e:
             self.after(0, lambda: messagebox.showerror("Hata", str(e)))
@@ -554,10 +566,73 @@ class QuickShareApp(Tk):
         if not save_path: return
         
         self.download_btn.configure(state="disabled", text="İndiriliyor...")
-        # self.progress_frame.pack(fill="x", padx=20, pady=10) # Persistent now
         self.progress_label.configure(text="İndirme Başlıyor...")
         
-        threading.Thread(target=self._download_thread, args=(save_path,), daemon=True).start()
+        # Try P2P first if available
+        if getattr(self, '_p2p_available', False):
+            threading.Thread(target=self._p2p_download_thread, args=(save_path,), daemon=True).start()
+        else:
+            threading.Thread(target=self._download_thread, args=(save_path,), daemon=True).start()
+
+    def _p2p_download_thread(self, save_path):
+        """Download files via WebRTC P2P DataChannel"""
+        try:
+            self.after(0, lambda: self.status_label.configure(text="🟢 P2P Bağlanıyor...", text_color="#06A77D"))
+            self.after(0, lambda: self.log_message("P2P bağlantısı kuruluyor..."))
+            
+            receiver = WebRTCReceiver()
+            receiver.save_path = save_path
+            receiver.log_callback = lambda msg: self.after(0, lambda: self.log_message(f"[P2P] {msg}"))
+            
+            def p2p_progress(dl, total, speed, current_file, total_files):
+                pct = (dl / total * 100) if total else 0
+                self.after(0, self.update_progress, pct, speed, current_file, total_files)
+            receiver.progress_callback = p2p_progress
+            
+            # Create offer
+            offer = receiver.create_offer_sync()
+            
+            # Send offer to sender via signal server
+            import requests
+            resp = requests.post(
+                f"{self.download_url}/rtc/offer",
+                json={"sdp": offer["sdp"], "type": offer["type"]},
+                timeout=15
+            )
+            
+            if not resp.ok:
+                raise Exception(f"Signal server hatası: {resp.status_code}")
+            
+            answer = resp.json()
+            if "error" in answer:
+                raise Exception(f"SDP hatası: {answer['error']}")
+            
+            # Set answer
+            receiver.set_answer_sync(answer["sdp"])
+            
+            self.after(0, lambda: self.log_message("P2P bağlantısı bekleniyor..."))
+            
+            # Wait for connection
+            if not receiver.wait_for_connection(timeout=15):
+                raise Exception("P2P bağlantısı zaman aşımına uğradı")
+            
+            if receiver.status == "failed":
+                raise Exception("P2P bağlantısı kurulamadı")
+            
+            self.after(0, lambda: self.status_label.configure(text="🟢 P2P Transfer", text_color="#06A77D"))
+            self.after(0, lambda: self.log_message("✅ P2P bağlandı! Dosyalar alınıyor..."))
+            
+            # Wait for transfer to complete
+            receiver.wait_for_transfer(timeout=None)
+            
+            self.after(0, self._on_download_complete, save_path)
+            receiver.stop()
+            
+        except Exception as e:
+            err_msg = str(e)
+            self.after(0, lambda: self.log_message(f"P2P hatası: {err_msg}. HTTP fallback'e geçiliyor..."))
+            # Fallback to HTTP download
+            self._download_thread(save_path)
 
 
 

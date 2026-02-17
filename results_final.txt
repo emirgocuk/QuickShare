@@ -1,0 +1,60 @@
+
+--- Testing Config: TCP Slashes ---
+Args: ['--tun=userspace-networking', '--socket=tcp://127.0.0.1:0', '--statedir=ts_debug_final', '--socks5-server=localhost:1056']
+STATUS: FAILED (Code 1)
+Error Output: TPM: successfully read all properties
+logtail started
+local disk logdir: C:\ProgramData\Tailscale\Logs
+Program starting: v1.94.2-t0a29cf18b-g3f044c9f6, Go 1.25.5: []string{"bin\\tailscaled.exe", "--tun=userspace-networking", "--socket=tcp://127.0.0.1:0", "--statedir=ts_debug_final", "--socks5-server=localhost:1056"}
+LogID: 283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0
+logpolicy: using dir C:\ProgramData\Tailscale
+dns: using *dns.windowsManager
+running ipconfig /registerdns ...
+flushing log.
+logger closing down
+error running ipconfig /registerdns after 12ms: exit status 1
+running ipconfig /flushdns ...
+ran ipconfig /flushdns in 12ms
+WSL: found 2 distributions
+safesocket.Listen: namedpipe.Listen: open tcp://127.0.0.1:0: YanlÄ±ÅŸ iÅŸlev.
+
+
+--- Testing Config: TCP No Slashes ---
+Args: ['--tun=userspace-networking', '--socket=tcp:127.0.0.1:0', '--statedir=ts_debug_final', '--socks5-server=localhost:1056']
+STATUS: FAILED (Code 1)
+Error Output: TPM: successfully read all properties
+logtail started
+local disk logdir: C:\ProgramData\Tailscale\Logs
+Program starting: v1.94.2-t0a29cf18b-g3f044c9f6, Go 1.25.5: []string{"bin\\tailscaled.exe", "--tun=userspace-networking", "--socket=tcp:127.0.0.1:0", "--statedir=ts_debug_final", "--socks5-server=localhost:1056"}
+LogID: 283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0
+logpolicy: using dir C:\ProgramData\Tailscale
+dns: using *dns.windowsManager
+running ipconfig /registerdns ...
+flushing log.
+logger closing down
+error running ipconfig /registerdns after 11ms: exit status 1
+running ipconfig /flushdns ...
+ran ipconfig /flushdns in 13ms
+WSL: found 2 distributions
+safesocket.Listen: namedpipe.Listen: open tcp:127.0.0.1:0: YanlÄ±ÅŸ iÅŸlev.
+
+
+--- Testing Config: Pipe Simple Name ---
+Args: ['--tun=userspace-networking', '--socket=qs-pipe', '--statedir=ts_debug_final', '--socks5-server=localhost:1056']
+STATUS: FAILED (Code 1)
+Error Output: TPM: successfully read all properties
+logtail started
+local disk logdir: C:\ProgramData\Tailscale\Logs
+Program starting: v1.94.2-t0a29cf18b-g3f044c9f6, Go 1.25.5: []string{"bin\\tailscaled.exe", "--tun=userspace-networking", "--socket=qs-pipe", "--statedir=ts_debug_final", "--socks5-server=localhost:1056"}
+LogID: 283a7e755403e7005bfb506625ab9e1926fe0d77a1c84d531e2e1d22db7b68b0
+logpolicy: using dir C:\ProgramData\Tailscale
+dns: using *dns.windowsManager
+running ipconfig /registerdns ...
+flushing log.
+logger closing down
+error running ipconfig /registerdns after 12ms: exit status 1
+running ipconfig /flushdns ...
+ran ipconfig /flushdns in 12ms
+WSL: found 2 distributions
+safesocket.Listen: namedpipe.Listen: open qs-pipe: YanlÄ±ÅŸ iÅŸlev.
+

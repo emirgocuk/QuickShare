@@ -1,6 +1,6 @@
 """
 QuickShare Flask Server
-Dosya sunma ve streaming
+Dosya sunma, streaming ve WebRTC signaling
 """
 
 from flask import Flask, send_file, jsonify, Response, request, stream_with_context
@@ -12,12 +12,16 @@ import threading
 import re
 import zipfile
 import base64
+import json
 from typing import List, Dict
 from config import CHUNK_SIZE, SERVER_HOST, SERVER_PORT
 from utils import create_file_info, get_files_from_directory, calculate_total_size, calculate_file_hash
 
 
 app = Flask(__name__)
+
+# WebRTC Sender instance (set by main_ctk.py)
+webrtc_sender = None
 
 # Transfer Monitoring
 class TransferMonitor:
@@ -45,7 +49,7 @@ class TransferMonitor:
             if filename not in self.active_files:
                 self.active_files[filename] = {'sent': 0, 'size': total}
             
-            self.active_files[filename]['sent'] += sent
+            self.active_files[filename]['sent'] = sent
             self.active_files[filename]['size'] = total 
 
     def finish_file(self, filename: str):
@@ -454,6 +458,58 @@ def run_server(port: int = SERVER_PORT, debug: bool = False):
         debug: Debug mode
     """
     app.run(host=SERVER_HOST, port=port, debug=debug, threaded=True)
+
+
+# ===== WebRTC Signaling Endpoints =====
+
+@app.route('/rtc/offer', methods=['POST'])
+def rtc_handle_offer():
+    """
+    Alıcıdan gelen SDP offer'ı al, answer oluştur ve döndür.
+    Bu endpoint sadece bağlantı kurulumu için — dosya verisi P2P geçer.
+    """
+    global webrtc_sender
+    
+    if not webrtc_sender:
+        return jsonify({"error": "WebRTC sender not initialized", "p2p": False}), 503
+    
+    try:
+        data = request.get_json()
+        if not data or 'sdp' not in data:
+            return jsonify({"error": "Missing SDP offer"}), 400
+        
+        offer_sdp = data['sdp']
+        
+        # Generate answer
+        answer = webrtc_sender.handle_offer_sync(offer_sdp)
+        
+        # Start sending files after connection is established
+        def _wait_and_send():
+            if webrtc_sender.wait_for_connection(timeout=30):
+                if webrtc_sender.status == "connected":
+                    time.sleep(0.5)
+                    webrtc_sender.send_files()
+        
+        threading.Thread(target=_wait_and_send, daemon=True).start()
+        
+        return jsonify(answer)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/rtc/status')
+def rtc_status():
+    """WebRTC P2P bağlantı durumunu döndür"""
+    global webrtc_sender
+    
+    if not webrtc_sender:
+        return jsonify({"p2p": False, "status": "not_initialized"})
+    
+    return jsonify({
+        "p2p": True,
+        "status": webrtc_sender.status
+    })
 
 
 # Test kodu

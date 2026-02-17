@@ -1,0 +1,187 @@
+﻿==================================================
+WebRTC P2P Loopback Test
+==================================================
+
+Ô£à Test file created: C:\Users\Emir\AppData\Local\Temp\quickshare_test_9sknptgk\test_100kb.bin
+   Hash: 25ac01cc4387a74753c7f463eb418a8328fd2bd94bdce80c0622fa6ec9d168ca
+   Size: 102400 bytes
+   Save dir: C:\Users\Emir\AppData\Local\Temp\quickshare_recv_zd96mc_9
+
+--- Setting up Sender ---
+  Sender started.
+
+--- Setting up Receiver ---
+
+--- Step 1: Create Offer ---
+  [RECV]   SDP offer olu┼şturuldu
+  Offer SDP type: offer
+  Offer SDP length: 1035 chars
+
+--- Step 2: Create Answer ---
+  [SENDER] SDP answer olu┼şturuldu
+  [SENDER] Ba─şlant─▒ durumu: connecting
+  Answer SDP type: answer
+  Answer SDP length: 1034 chars
+
+--- Step 3: Set Answer ---
+  [RECV]   SDP answer al─▒nd─▒, P2P ba─şlant─▒s─▒ kuruluyor...
+
+--- Step 4: Waiting for P2P connection ---
+  [RECV]   Ba─şlant─▒ durumu: connecting
+  [RECV]   Ba─şlant─▒ durumu: connected
+  [SENDER] Ba─şlant─▒ durumu: connected
+  [SENDER] DataChannel ba─şland─▒!
+  [RECV]   DataChannel a├ğ─▒ld─▒!
+  Ô£à Connected! Receiver status: connected
+
+--- Step 5: Waiting for sender to detect 'ready' ---
+  [SENDER] Al─▒c─▒ haz─▒r, transfer ba┼şl─▒yor...
+  Triggering file send...
+
+--- Step 6: Waiting for transfer to complete ---
+  [SENDER] Dosya listesi g├Ânderildi: 1 dosya
+  [SENDER] Ô£à test_100kb.bin g├Ânderildi (102400 bytes)
+  [SENDER] Transfer tamamland─▒!
+  [RECV]   Dosya listesi al─▒nd─▒: 1 dosya, toplam 102400 bytes
+  [RECV]   Al─▒n─▒yor: test_100kb.bin (102400 bytes)
+  [RECV]   Ô£à test_100kb.bin al─▒nd─▒ (hash OK)
+  [RECV]   Transfer tamamland─▒! 1 dosya al─▒nd─▒.
+
+--- Step 7: Verification ---
+  Expected: 25ac01cc4387a74753c7f463eb418a8328fd2bd94bdce80c0622fa6ec9d168ca
+  Actual:   25ac01cc4387a74753c7f463eb418a8328fd2bd94bdce80c0622fa6ec9d168ca
+  Ô£à Hash MATCH! File transfer successful!
+  Progress updates: 2
+
+==================================================
+Result: Ô£à PASSED
+==================================================
+python : <sys>:0: RuntimeW
+arning: coroutine 'RTCPeer
+Connection.close' was neve
+r awaited
+At line:1 char:32
++ $env:PYTHONIOENCODING='u
+tf-8'; python test_webrtc.
+py 2>&1 | Out-File  ...
++                         
+       ~~~~~~~~~~~~~~~~~~~
+~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (<  
+  sys>:0: Runtim...s ne   
+ ver awaited:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+RuntimeWarning: Enable tra
+cemalloc to get the object
+ allocation traceback
+Task was destroyed but it 
+is pending!
+task: <Task pending name='
+Task-43' coro=<RTCPeerConn
+ection.close() running at 
+C:\Users\Emir\AppData\Loca
+l\Programs\Python\Python31
+3\Lib\site-packages\aiortc
+\rtcpeerconnection.py:513>
+ cb=[_chain_future.<locals
+>._call_set_state() at C:\
+Users\Emir\AppData\Local\P
+rograms\Python\Python313\L
+ib\asyncio\futures.py:391]
+>
+Task was destroyed but it 
+is pending!
+task: <Task pending name='
+Task-44' coro=<RTCPeerConn
+ection.close() running at 
+C:\Users\Emir\AppData\Loca
+l\Programs\Python\Python31
+3\Lib\site-packages\aiortc
+\rtcpeerconnection.py:513>
+ cb=[_chain_future.<locals
+>._call_set_state() at C:\
+Users\Emir\AppData\Local\P
+rograms\Python\Python313\L
+ib\asyncio\futures.py:391]
+>
+Task was destroyed but it 
+is pending!
+task: <Task pending name='
+Task-16' coro=<RTCIceTrans
+port._monitor() running at
+ C:\Users\Emir\AppData\Loc
+al\Programs\Python\Python3
+13\Lib\site-packages\aiort
+c\rtcicetransport.py:358> 
+wait_for=<Future pending c
+b=[shield.<locals>._outer_
+done_callback() at C:\User
+s\Emir\AppData\Local\Progr
+ams\Python\Python313\Lib\a
+syncio\tasks.py:975, Task.
+task_wakeup()]>>
+Task was destroyed but it 
+is pending!
+task: <Task pending name='
+Task-24' coro=<RTCIceTrans
+port._monitor() running at
+ C:\Users\Emir\AppData\Loc
+al\Programs\Python\Python3
+13\Lib\site-packages\aiort
+c\rtcicetransport.py:358> 
+wait_for=<Future pending c
+b=[shield.<locals>._outer_
+done_callback() at C:\User
+s\Emir\AppData\Local\Progr
+ams\Python\Python313\Lib\a
+syncio\tasks.py:975, Task.
+task_wakeup()]>>
+Task was destroyed but it 
+is pending!
+task: <Task pending name='
+Task-30' coro=<RTCDtlsTran
+sport.__run() running at C
+:\Users\Emir\AppData\Local
+\Programs\Python\Python313
+\Lib\site-packages\aiortc\
+rtcdtlstransport.py:570> w
+ait_for=<Future cancelled>
+>
+Task was destroyed but it 
+is pending!
+task: <Task pending name='
+Task-32' coro=<RTCDtlsTran
+sport.__run() running at C
+:\Users\Emir\AppData\Local
+\Programs\Python\Python313
+\Lib\site-packages\aiortc\
+rtcdtlstransport.py:570> w
+ait_for=<Future cancelled>
+>
+Task was destroyed but it 
+is pending!
+task: <Task pending name='
+Task-28' coro=<Connection.
+query_consent() running at
+ C:\Users\Emir\AppData\Loc
+al\Programs\Python\Python3
+13\Lib\site-packages\aioic
+e\ice.py:1074> wait_for=<F
+uture pending cb=[Task.tas
+k_wakeup()]>>
+Task was destroyed but it 
+is pending!
+task: <Task pending name='
+Task-27' coro=<Connection.
+query_consent() running at
+ C:\Users\Emir\AppData\Loc
+al\Programs\Python\Python3
+13\Lib\site-packages\aioic
+e\ice.py:1074> wait_for=<F
+uture pending cb=[Task.tas
+k_wakeup()]>>
