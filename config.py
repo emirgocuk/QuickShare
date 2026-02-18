@@ -27,6 +27,12 @@ ICE_SERVERS = [
     {"urls": "stun:stun.l.google.com:19302"},
     {"urls": "stun:stun1.l.google.com:19302"},
     {"urls": "stun:stun.cloudflare.com:3478"},
+    # TURN Server Örneği (Simetrik NAT için gereklidir)
+    # {
+    #     "urls": "turn:your-turn-server.com:3478",
+    #     "username": "user",
+    #     "credential": "password"
+    # }
 ]
 WEBRTC_TIMEOUT = 15  # P2P bağlantı kurulma süresi (saniye)
 

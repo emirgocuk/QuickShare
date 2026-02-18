@@ -16,6 +16,7 @@ import json
 from typing import List, Dict
 from config import CHUNK_SIZE, SERVER_HOST, SERVER_PORT
 from utils import create_file_info, get_files_from_directory, calculate_total_size, calculate_file_hash
+from transfer_history import history
 
 
 app = Flask(__name__)
@@ -214,6 +215,11 @@ def download_file(filename: str):
         finally:
             transfer_monitor.end_transfer()
             transfer_monitor.finish_file(os.path.basename(target_file))
+            # Log send history
+            history.log_transfer(
+                filename=os.path.basename(target_file), size=file_size,
+                direction="send", status="success", method="http"
+            )
 
     # Streaming Response
     headers = {
@@ -323,6 +329,11 @@ def download_file_b64(encoded_filename: str):
         finally:
             transfer_monitor.end_transfer()
             transfer_monitor.finish_file(os.path.basename(target_file))
+            # Log send history
+            history.log_transfer(
+                filename=os.path.basename(target_file), size=file_size,
+                direction="send", status="success", method="http"
+            )
 
     # Streaming Response
     headers = {

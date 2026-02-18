@@ -14,11 +14,12 @@ import webbrowser
 from typing import List, Optional
 
 from config import WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE
-from utils import format_size, format_speed, format_time, validate_url, calculate_total_size
+from utils import format_size, format_speed, format_time, validate_url, calculate_total_size, calculate_eta
 from server import set_shared_files, run_server, transfer_monitor
 from tunnel_manager import TunnelManager
 from downloader import Downloader
 from webrtc_manager import WebRTCSender, WebRTCReceiver
+from transfer_history import history
 
 # CustomTkinter appearance
 ctk.set_appearance_mode("dark")
@@ -53,6 +54,8 @@ class QuickShareApp(Tk):
         self.download_url: Optional[str] = None
         self.remote_files: List[dict] = []
         self.is_sharing = False
+        self.is_paused = False
+        self._download_start_time: float = 0
         
         # Grid Layout (1x2)
         self.grid_columnconfigure(1, weight=1)
@@ -216,6 +219,10 @@ class QuickShareApp(Tk):
         self.url_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
         
         ctk.CTkButton(self.sharing_info_frame, text="Kopyala", command=self.copy_url, width=80).pack(side="left")
+        
+        self.pause_btn = ctk.CTkButton(self.sharing_info_frame, text="⏸️", command=self.toggle_pause, width=40)
+        self.pause_btn.pack(side="left", padx=(10, 0))
+        
         ctk.CTkButton(self.sharing_info_frame, text="Durdur", command=self.stop_sharing, fg_color="#D62246", hover_color="#b11d3a", width=80).pack(side="left", padx=10)
 
         # Stats
@@ -288,13 +295,15 @@ class QuickShareApp(Tk):
 
     def _download_thread(self, save_path):
         try:
+            self._download_start_time = time.time()
             # Update Status to Receiving
             self.after(0, lambda: self.status_label.configure(text="🟢 Dosya İndiriliyor", text_color="#06A77D"))
             self.after(0, lambda: self.log_message(f"İndirme başlatıldı: {save_path}"))
 
             def cb(dl, total, speed, current_file_index, total_files):
                 pct = (dl / total * 100) if total else 0
-                self.after(0, self.update_progress, pct, speed, current_file_index, total_files)
+                eta = calculate_eta(total, dl, speed)
+                self.after(0, self.update_progress, pct, speed, current_file_index, total_files, eta)
             
             # Log callback for main thread
             def log_cb(msg):
@@ -495,18 +504,43 @@ class QuickShareApp(Tk):
         self.after(1000, self.update_stats)
 
     def stop_sharing(self):
+        """Stop sharing"""
+        self.is_sharing = False
+        self.is_paused = False
+        self.pause_btn.configure(text="⏸️")
+        
         if self.tunnel_manager:
             self.tunnel_manager.stop()
         self.tunnel_manager = None
-        # Stop WebRTC sender
+        
+        # Stop background thread
+        # Server runs in daemon thread, hard to stop gracefully without complex logic
+        # For now we just hide UI and stop WebRTC
         if self.webrtc_sender:
             self.webrtc_sender.stop()
             self.webrtc_sender = None
             import server as srv
             srv.webrtc_sender = None
-        self.is_sharing = False
+            
         self.sharing_info_frame.grid_remove()
         self.start_btn.configure(state="normal", text="🚀 Paylaş")
+        self.status_label.configure(text="Durum: Hazır", text_color="white") # Reset status label
+
+    def toggle_pause(self):
+        """Toggle pause/resume for P2P transfer"""
+        if not self.webrtc_sender:
+            return
+            
+        if self.is_paused:
+            self.webrtc_sender.resume()
+            self.is_paused = False
+            self.pause_btn.configure(text="⏸️")
+            self.status_label.configure(text="🟢 P2P Aktif", text_color="#06A77D")
+        else:
+            self.webrtc_sender.pause()
+            self.is_paused = True
+            self.pause_btn.configure(text="▶️")
+            self.status_label.configure(text="⏸️ P2P Duraklatıldı", text_color="#F7D358")
 
     def copy_url(self):
         url = self.url_entry.get()
@@ -586,7 +620,8 @@ class QuickShareApp(Tk):
             
             def p2p_progress(dl, total, speed, current_file, total_files):
                 pct = (dl / total * 100) if total else 0
-                self.after(0, self.update_progress, pct, speed, current_file, total_files)
+                eta = calculate_eta(total, dl, speed)
+                self.after(0, self.update_progress, pct, speed, current_file, total_files, eta)
             receiver.progress_callback = p2p_progress
             
             # Create offer
@@ -625,6 +660,18 @@ class QuickShareApp(Tk):
             # Wait for transfer to complete
             receiver.wait_for_transfer(timeout=None)
             
+            # Log P2P history
+            duration = time.time() - self._download_start_time if self._download_start_time else 0
+            total_size = sum(f['size'] for f in self.remote_files) if self.remote_files else 0
+            avg_speed = total_size / duration if duration > 0 else 0
+            for f in self.remote_files:
+                history.log_transfer(
+                    filename=f['name'], size=f['size'],
+                    direction="receive", status="success",
+                    duration_sec=duration / len(self.remote_files) if self.remote_files else 0,
+                    avg_speed=avg_speed, method="p2p"
+                )
+            
             self.after(0, self._on_download_complete, save_path)
             receiver.stop()
             
@@ -636,9 +683,10 @@ class QuickShareApp(Tk):
 
 
 
-    def update_progress(self, pct, speed, current, total):
+    def update_progress(self, pct, speed, current, total, eta=-1):
         self.progress_bar.set(pct / 100)
-        self.progress_label.configure(text=f"Dosya {current}/{total} - %{pct:.1f} ({format_speed(speed)})")
+        eta_str = f" — ~{format_time(eta)} kaldı" if eta >= 0 else ""
+        self.progress_label.configure(text=f"Dosya {current}/{total} - %{pct:.1f} ({format_speed(speed)}){eta_str}")
 
     def _on_download_complete(self, path):
         messagebox.showinfo("Tamamlandı", f"Dosyalar indirildi:\n{path}")

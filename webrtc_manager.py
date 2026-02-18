@@ -16,7 +16,13 @@ from config import WEBRTC_CHUNK_SIZE, ICE_SERVERS, WEBRTC_TIMEOUT
 
 def _get_rtc_config() -> RTCConfiguration:
     """Create RTCConfiguration from ICE_SERVERS config"""
-    ice_servers = [RTCIceServer(urls=s["urls"]) for s in ICE_SERVERS]
+    ice_servers = []
+    for s in ICE_SERVERS:
+        ice_servers.append(RTCIceServer(
+            urls=s["urls"],
+            username=s.get("username"),
+            credential=s.get("credential")
+        ))
     return RTCConfiguration(iceServers=ice_servers)
 
 
@@ -66,6 +72,7 @@ class WebRTCSender:
     def stop(self):
         """Clean shutdown"""
         self._stopped = True
+        self._pause_event.set()  # Unpause to let loops exit
         if self.pc and self._loop and self._loop.is_running():
             try:
                 future = asyncio.run_coroutine_threadsafe(self.pc.close(), self._loop)
@@ -75,6 +82,28 @@ class WebRTCSender:
         if self._loop:
             self._loop.call_soon_threadsafe(self._loop.stop)
         self.status = "idle"
+
+    def pause(self):
+        """Pause transfer"""
+        if not self._stopped:
+            self._pause_event.clear()
+            self._log("⏸️ Transfer duraklatıldı")
+            # Send pause signal to receiver
+            if self.channel and self.channel.readyState == "open":
+                try:
+                    self.channel.send(json.dumps({"type": "PAUSE"}))
+                except: pass
+
+    def resume(self):
+        """Resume transfer"""
+        if not self._stopped:
+            self._pause_event.set()
+            self._log("▶️ Transfer devam ediyor")
+            # Send resume signal to receiver
+            if self.channel and self.channel.readyState == "open":
+                try:
+                    self.channel.send(json.dumps({"type": "RESUME"}))
+                except: pass
 
     async def handle_offer(self, offer_sdp: str, offer_type: str = "offer") -> dict:
         """
@@ -102,11 +131,20 @@ class WebRTCSender:
                 # Receiver'dan gelen kontrol mesajları
                 try:
                     data = json.loads(message)
-                    if data.get("type") == "ready":
+                    if data.get("type") == "PAUSE":
+                        self._log("⏸️ Alıcı tarafından duraklatıldı")
+                        self._pause_event.clear()
+                    elif data.get("type") == "RESUME":
+                        self._log("▶️ Alıcı tarafından devam ettirildi")
+                        self._pause_event.set()
+                    elif data.get("type") == "ready":
                         self._receiver_ready.set()
                         self._log("Alıcı hazır, transfer başlıyor...")
-                except:
-                    pass
+                except json.JSONDecodeError:
+                    self._log(f"Alıcıdan bilinmeyen mesaj: {message}")
+                except Exception as e:
+                    self._log(f"Alıcı mesajı işlenirken hata: {e}")
+
 
         @self.pc.on("connectionstatechange")
         async def on_state_change():
@@ -184,10 +222,12 @@ class WebRTCSender:
 
             with open(path, "rb") as f:
                 while True:
-                    if self._stopped:
-                        self._log("Transfer durduruldu.")
-                        return
+                    # Check pause
+                    await self._pause_event.wait()
                     
+                    if self._stopped:
+                        break
+                        
                     chunk = f.read(WEBRTC_CHUNK_SIZE)
                     if not chunk:
                         break
@@ -251,6 +291,10 @@ class WebRTCReceiver:
         self.status = "idle"
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
+        self._stopped = False # Added for clean shutdown
+        self._pause_event = asyncio.Event() 
+        self._pause_event.set()  # Not paused by default
+        
         self.log_callback: Optional[Callable] = None
         self.progress_callback: Optional[Callable] = None
         self.save_path: Optional[str] = None
@@ -291,6 +335,8 @@ class WebRTCReceiver:
 
     def stop(self):
         """Clean shutdown"""
+        self._stopped = True
+        self._pause_event.set() # Unpause any waiting loops
         if self._current_file_handle:
             try:
                 self._current_file_handle.close()
@@ -305,6 +351,24 @@ class WebRTCReceiver:
         if self._loop:
             self._loop.call_soon_threadsafe(self._loop.stop)
         self.status = "idle"
+
+    def pause(self):
+        """Send pause signal to sender"""
+        if self.channel and self.channel.readyState == "open":
+            try:
+                self.channel.send(json.dumps({"type": "PAUSE"}))
+                self._pause_event.clear()
+                self._log("⏸️ Duraklatma isteği gönderildi")
+            except: pass
+
+    def resume(self):
+        """Send resume signal to sender"""
+        if self.channel and self.channel.readyState == "open":
+            try:
+                self.channel.send(json.dumps({"type": "RESUME"}))
+                self._pause_event.set()
+                self._log("▶️ Devam etme isteği gönderildi")
+            except: pass
 
     async def create_offer(self) -> dict:
         """
@@ -376,10 +440,19 @@ class WebRTCReceiver:
 
     def _handle_message(self, message):
         """Handle incoming DataChannel messages"""
+        # Text message (Control)
         if isinstance(message, str):
-            # JSON control message
             try:
                 data = json.loads(message)
+                if data.get("type") == "PAUSE":
+                    self._log("⏸️ Gönderici tarafından duraklatıldı")
+                    self._pause_event.clear()
+                    return
+                elif data.get("type") == "RESUME":
+                    self._log("▶️ Gönderici tarafından devam ettirildi")
+                    self._pause_event.set()
+                    return
+                
                 msg_type = data.get("type")
 
                 if msg_type == "file_list":

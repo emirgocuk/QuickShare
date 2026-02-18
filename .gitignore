@@ -4,12 +4,44 @@ __pycache__/
 *.so
 .Python
 venv/
-build/
-dist/
 *.egg-info/
 
-# PyInstaller
+# Build outputs
+build/
+dist/
 *.spec
+
+# Binaries
+bin/tailscale.exe
+bin/tailscaled.exe
+
+# Tailscale data (legacy)
+ts_data/
+ts_data_clean/
+ts_data_fresh_debug/
+ts_debug_data/
+ts_debug_final/
+ts_debug_pipe/
+
+# Debug & test output files
+debug_*.txt
+debug_*.py
+out.txt
+out_race.txt
+results*.txt
+test_output.txt
+test_webrtc_output.txt
+test_webrtc_utf8.txt
+
+# Test data directories
+test_data/
+test_downloads/
+test_hash_data/
+test_hash_downloads/
+test_files/
+
+# App data
+data/
 
 # Cloudflared
 bin/cloudflared.exe
@@ -17,9 +49,7 @@ bin/cloudflared.exe
 # IDE
 .vscode/
 .idea/
-
-# Test
-test_files/
+.gemini/
 
 # OS
 .DS_Store

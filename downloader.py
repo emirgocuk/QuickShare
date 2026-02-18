@@ -12,6 +12,7 @@ from base64 import urlsafe_b64encode
 from typing import Callable, Optional, List, Dict
 from config import CHUNK_SIZE, TIMEOUT, MAX_RETRIES
 from utils import format_size, format_speed, calculate_eta, calculate_file_hash
+from transfer_history import history
 
 
 class Downloader:
@@ -22,6 +23,8 @@ class Downloader:
         self.session.timeout = TIMEOUT
         if proxies:
             self.session.proxies.update(proxies)
+        self.hash_results: Dict[str, str] = {}  # {filename: "verified"|"failed"|"skipped"}
+        self.transfer_start_time: float = 0
         
     def get_file_list(self, url: str) -> List[Dict]:
         """
@@ -149,7 +152,9 @@ class Downloader:
                 time.sleep(2 * retries)  # Exponential backoff (ish)
         
         # Verify Hash
-        print("Verifying file integrity...")
+        msg = f"🔄 {filename} doğrulanıyor..."
+        print(msg)
+        if log_callback: log_callback(msg)
         try:
             # Server'dan hash al
             hash_url = url + 'hash/' + quote(filename)
@@ -160,18 +165,24 @@ class Downloader:
                 local_hash = calculate_file_hash(file_path)
                 
                 if server_hash == local_hash:
-                    print("✅ Hash verification SUCCESSFUL")
+                    msg = f"✅ {filename} — Hash doğrulandı"
+                    self.hash_results[filename] = "verified"
                 else:
-                    print(f"❌ Hash verification FAILED!")
-                    print(f"   Server: {server_hash}")
-                    print(f"   Local:  {local_hash}")
-                    # Opsiyonel: Dosyayı sil veya yeniden indir?
-                    # Şimdilik sadece uyarı veriyoruz.
+                    msg = f"❌ {filename} — Hash UYUŞMADI!"
+                    self.hash_results[filename] = "failed"
+                print(msg)
+                if log_callback: log_callback(msg)
             else:
-                print(f"⚠️ Could not get hash from server (Status: {hash_response.status_code})")
+                msg = f"⚠️ {filename} — Hash alınamadı (Status: {hash_response.status_code})"
+                self.hash_results[filename] = "skipped"
+                print(msg)
+                if log_callback: log_callback(msg)
                 
         except Exception as e:
-            print(f"⚠️ Hash verification skipped: {e}")
+            msg = f"⚠️ {filename} — Hash doğrulama atlandı: {e}"
+            self.hash_results[filename] = "skipped"
+            print(msg)
+            if log_callback: log_callback(msg)
     
     def download_all(
         self,
@@ -198,24 +209,17 @@ class Downloader:
         total_size = sum(f['size'] for f in files)
         
         # Daha önce ne kadar indirilmiş?
-        # Bu biraz karmaşık çünkü her dosyanın ne kadar indiğini diskten bakmalıyız
         total_downloaded = 0
         
         # Global start time
         start_time = time.time()
+        self.transfer_start_time = start_time
+        self.hash_results = {}  # Reset
         
         # Her dosya için callback wrapper
         def file_progress_wrapper(file_downloaded, file_total, file_speed, current_file_idx, total_files_count):
-            # Global progress'i hesaplamamız lazım
-            # Bu callback tek bir dosya için progress veriyor.
-            # Global progress için state tutmalıyız veya basitçe "artış" miktarını eklemeliyiz.
-            # Ancak download_file stateless.
-            
-            # Basit Yöntem:
-            # Şu anki dosyanın indirilen kısmını, önceki dosyaların tamamlanmış boyutuna ekle.
             nonlocal total_downloaded
             
-            # Toplam indirilen = (Şu ana kadar biten dosyalar) + (Şu anki dosyanın indirilen kısmı)
             current_total = finished_files_size + file_downloaded
             
             elapsed = time.time() - start_time
@@ -239,15 +243,30 @@ class Downloader:
             try:
                 self.download_file(url, file['name'], save_path, file_cb, log_callback)
             except Exception as e:
-                err_msg = f"Error downloading {file['name']}: {e}"
-                print(err_msg)
-                if log_callback: log_callback(err_msg)
-                # Bir dosya başarısız olursa tüm işlemi durdurmalı mıyız?
-                # Evet, raise edelim.
+                # Log failed transfer
+                duration = time.time() - start_time
+                history.log_transfer(
+                    filename=file['name'], size=file['size'],
+                    direction="receive", status="failed",
+                    duration_sec=duration, method="http"
+                )
                 raise e
             
             # Dosya bitti, boyutunu global sayaca ekle
             finished_files_size += file['size']
+        
+        # Tüm dosyalar bitti — history'ye kaydet
+        duration = time.time() - start_time
+        avg_speed = total_size / duration if duration > 0 else 0
+        for file in files:
+            hash_status = self.hash_results.get(file['name'], 'skipped')
+            history.log_transfer(
+                filename=file['name'], size=file['size'],
+                direction="receive", status="success",
+                hash_value=hash_status,
+                duration_sec=duration / total_files,
+                avg_speed=avg_speed, method="http"
+            )
     
     def download_all_as_zip(
         self,
