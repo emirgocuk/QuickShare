@@ -11,7 +11,15 @@ import time
 import threading
 from typing import Optional, Callable, List, Dict
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer
-from config import WEBRTC_CHUNK_SIZE, ICE_SERVERS, WEBRTC_TIMEOUT
+import socketio
+from config import WEBRTC_CHUNK_SIZE, ICE_SERVERS, WEBRTC_TIMEOUT, SIGNALING_SERVER_URL
+
+
+def is_safe_path(basedir, path, follow_symlinks=True):
+    # resolves symbolic links
+    if follow_symlinks:
+        return os.path.realpath(path).startswith(os.path.realpath(basedir))
+    return os.path.abspath(path).startswith(os.path.abspath(basedir))
 
 
 def _get_rtc_config() -> RTCConfiguration:
@@ -37,19 +45,47 @@ class WebRTCSender:
         self.channel = None
         self.files: List[Dict] = []  # [{name, path, size}]
         self.status = "idle"  # idle, waiting, connected, transferring, done
-        self._transfer_event = asyncio.Event()
+        self._receiver_ready = asyncio.Event() # Replaced _transfer_event
+        self._transfer_start_event = asyncio.Event()
+        self._files_to_send = [] # Subset to send
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self.log_callback: Optional[Callable] = None
         self.progress_callback: Optional[Callable] = None
         # Track connection state
         self._connected_event = threading.Event()
-        self._receiver_ready = threading.Event()
         # Speed tracking
         self._speed_last_time = 0.0
         self._speed_last_bytes = 0
         self._current_speed = 0.0
         self._stopped = False
+        self._pause_event = asyncio.Event()
+        self._pause_event = asyncio.Event()
+        self._pause_event.set() # Not paused by default
+        self.signaling = None
+
+    def setup_signaling(self, signaling_client):
+        """Attach signaling client"""
+        self.signaling = signaling_client
+        self.signaling.on_offer = self.handle_signaling_offer
+        self.signaling.on_ice = self.handle_signaling_ice
+
+    async def handle_signaling_offer(self, sdp, sender_sid):
+        """Handle offer from signaling server"""
+        self._log(f"Offer received from {sender_sid}")
+        answer = await self.handle_offer(sdp)
+        await self.signaling.send_answer(answer["sdp"], target_sid=sender_sid)
+
+    async def handle_signaling_ice(self, candidate, sender_sid):
+        """Handle ICE candidate"""
+        if self.pc:
+            try:
+                # Proper ICE candidate handling depends on aiortc API
+                # For simplicity, we might just log or implement if strict ICE is needed.
+                # aiortc handles trickle ICE if integrated, but often works with single SDP exchange
+                # if candidates are included in SDP.
+                pass 
+            except: pass
 
     def _log(self, msg):
         if self.log_callback:
@@ -64,6 +100,14 @@ class WebRTCSender:
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
 
+    def wait_until_ready(self, timeout=5.0):
+        """Wait until the async loop is initialized"""
+        start = time.time()
+        while self._loop is None:
+            if time.time() - start > timeout:
+                raise RuntimeError("WebRTC loop failed to start")
+            time.sleep(0.01)
+
     def _run_loop(self):
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
@@ -71,6 +115,14 @@ class WebRTCSender:
 
     def stop(self):
         """Clean shutdown"""
+        # Send STOPPED signal
+        if self.channel and self.channel.readyState == "open" and not self._stopped and self._loop and self._loop.is_running():
+            try:
+                # Fire and forget
+                self._loop.call_soon_threadsafe(self.channel.send, json.dumps({"type": "STOPPED"}))
+                time.sleep(0.1) # Brief wait for flush
+            except: pass
+
         self._stopped = True
         self._pause_event.set()  # Unpause to let loops exit
         if self.pc and self._loop and self._loop.is_running():
@@ -82,16 +134,18 @@ class WebRTCSender:
         if self._loop:
             self._loop.call_soon_threadsafe(self._loop.stop)
         self.status = "idle"
+        self._current_speed = 0.0
 
     def pause(self):
         """Pause transfer"""
         if not self._stopped:
             self._pause_event.clear()
+            self._current_speed = 0.0 # Reset speed
             self._log("⏸️ Transfer duraklatıldı")
             # Send pause signal to receiver
-            if self.channel and self.channel.readyState == "open":
+            if self.channel and self.channel.readyState == "open" and self._loop and self._loop.is_running():
                 try:
-                    self.channel.send(json.dumps({"type": "PAUSE"}))
+                    self._loop.call_soon_threadsafe(self.channel.send, json.dumps({"type": "PAUSE"}))
                 except: pass
 
     def resume(self):
@@ -100,9 +154,9 @@ class WebRTCSender:
             self._pause_event.set()
             self._log("▶️ Transfer devam ediyor")
             # Send resume signal to receiver
-            if self.channel and self.channel.readyState == "open":
+            if self.channel and self.channel.readyState == "open" and self._loop and self._loop.is_running():
                 try:
-                    self.channel.send(json.dumps({"type": "RESUME"}))
+                    self._loop.call_soon_threadsafe(self.channel.send, json.dumps({"type": "RESUME"}))
                 except: pass
 
     async def handle_offer(self, offer_sdp: str, offer_type: str = "offer") -> dict:
@@ -137,9 +191,23 @@ class WebRTCSender:
                     elif data.get("type") == "RESUME":
                         self._log("▶️ Alıcı tarafından devam ettirildi")
                         self._pause_event.set()
+                    elif data.get("type") == "DOWNLOAD_REQUEST":
+                        requested = data.get("files", [])
+                        if not requested:
+                            # If empty, maybe assume all? Or nothing.
+                            # Let's assume all if empty or special flag?
+                            # For safety, if empty list, send nothing? 
+                            # Let's assume the list contains names.
+                            # If "all" flag is present?
+                            pass
+                        
+                        self._files_to_send = requested
+                        self._log(f"İndirme isteği alındı: {len(requested)} dosya")
+                        self._transfer_start_event.set()
+
                     elif data.get("type") == "ready":
                         self._receiver_ready.set()
-                        self._log("Alıcı hazır, transfer başlıyor...")
+                        # self._log("Alıcı hazır, transfer başlıyor...") # Moved to async loop
                 except json.JSONDecodeError:
                     self._log(f"Alıcıdan bilinmeyen mesaj: {message}")
                 except Exception as e:
@@ -195,13 +263,36 @@ class WebRTCSender:
             "total_size": sum(f["size"] for f in self.files)
         }
         self.channel.send(json.dumps(file_list_msg))
-        self._log(f"Dosya listesi gönderildi: {len(self.files)} dosya")
+        self._log("Dosya listesi gönderildi, seçim bekleniyor...")
+        
+        # Wait for download request
+        await self._transfer_start_event.wait()
+        
+        # Filter files to send
+        files_to_send = []
+        if self._files_to_send:
+            # Filter self.files keeping order
+            files_to_send = [f for f in self.files if f['name'] in self._files_to_send]
+            if not files_to_send:
+                self._log("⚠️ İstenen dosyalar bulunamadı veya liste boş.")
+                # We should probably send an "end" or error
+                # For now, just log and proceed with empty list, which will skip transfer.
+                pass
+        else:
+            # If _files_to_send is empty, it means the receiver requested all or didn't specify.
+            # For now, we'll assume if _files_to_send is empty after _transfer_start_event,
+            # it implies "send all". This might need refinement based on receiver behavior.
+            files_to_send = self.files
+        
+        total_files_count = len(files_to_send)
+        self._log(f"Transfer başlıyor: {total_files_count} dosya gönderilecek.")
 
-        # Wait for receiver to be ready
         total_sent = 0
-        total_size = sum(f["size"] for f in self.files)
+        total_size = sum(f["size"] for f in files_to_send)
 
-        for i, file_info in enumerate(self.files):
+        for i, file_info in enumerate(files_to_send):
+            if self._stopped:
+                break
             name = file_info["name"]
             path = file_info["path"]
             size = file_info["size"]
@@ -212,7 +303,7 @@ class WebRTCSender:
                 "name": name,
                 "size": size,
                 "index": i,
-                "total": len(self.files)
+                "total": total_files_count
             }
             self.channel.send(json.dumps(start_msg))
 
@@ -323,10 +414,64 @@ class WebRTCReceiver:
         if self.log_callback:
             self.log_callback(msg)
 
+    def setup_signaling(self, signaling_client):
+        """Attach signaling client"""
+        self.signaling = signaling_client
+        self.signaling.on_answer = self.handle_signaling_answer
+        self.signaling.on_ice = self.handle_signaling_ice
+
+    async def connect_via_signaling(self):
+        """Initiate connection via signaling server"""
+        # Create Offer
+        self.status = "connecting"
+        self.pc = RTCPeerConnection(configuration=_get_rtc_config())
+        
+        # Create DataChannel
+        self.channel = self.pc.createDataChannel("fileTransfer", ordered=True)
+        self._setup_datachannel(self.channel)
+        
+        # Create Offer
+        offer = await self.pc.createOffer()
+        await self.pc.setLocalDescription(offer)
+        
+        # Send Offer via Signaling
+        await self.signaling.send_offer(self.pc.localDescription.sdp)
+        self._log("Offer sent to signaling server")
+
+    async def handle_signaling_answer(self, sdp, sender_sid):
+        """Handle answer from signaling server"""
+        self._log(f"Answer received from {sender_sid}")
+        answer = RTCSessionDescription(sdp=sdp, type="answer")
+        await self.pc.setRemoteDescription(answer)
+        self._log("Remote description set (Answer)")
+
+    async def handle_signaling_ice(self, candidate, sender_sid):
+        pass
+
+    def _setup_datachannel(self, channel):
+        @channel.on("open")
+        def on_open():
+            self._log("DataChannel AÇIK! (Signaling)")
+            self.status = "connected"
+            self._connected_event.set()
+            channel.send(json.dumps({"type": "ready"}))
+
+        @channel.on("message")
+        def on_message(message):
+            self._handle_message(message)
+
     def start(self):
         """Start the async event loop in a background thread"""
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
+
+    def wait_until_ready(self, timeout=5.0):
+        """Wait until the async loop is initialized"""
+        start = time.time()
+        while self._loop is None:
+            if time.time() - start > timeout:
+                raise RuntimeError("WebRTC loop failed to start")
+            time.sleep(0.01)
 
     def _run_loop(self):
         self._loop = asyncio.new_event_loop()
@@ -351,24 +496,38 @@ class WebRTCReceiver:
         if self._loop:
             self._loop.call_soon_threadsafe(self._loop.stop)
         self.status = "idle"
+        self._current_speed = 0.0
 
     def pause(self):
         """Send pause signal to sender"""
-        if self.channel and self.channel.readyState == "open":
+        if self.channel and self.channel.readyState == "open" and self._loop and self._loop.is_running():
             try:
-                self.channel.send(json.dumps({"type": "PAUSE"}))
+                self._loop.call_soon_threadsafe(self.channel.send, json.dumps({"type": "PAUSE"}))
                 self._pause_event.clear()
                 self._log("⏸️ Duraklatma isteği gönderildi")
             except: pass
 
     def resume(self):
         """Send resume signal to sender"""
-        if self.channel and self.channel.readyState == "open":
+        if self.channel and self.channel.readyState == "open" and self._loop and self._loop.is_running():
             try:
-                self.channel.send(json.dumps({"type": "RESUME"}))
+                self._loop.call_soon_threadsafe(self.channel.send, json.dumps({"type": "RESUME"}))
                 self._pause_event.set()
                 self._log("▶️ Devam etme isteği gönderildi")
             except: pass
+
+    def request_download(self, filenames: list):
+        """Send download request with specific filenames"""
+        if self.channel and self.channel.readyState == "open" and self._loop and self._loop.is_running():
+            try:
+                msg = {
+                    "type": "DOWNLOAD_REQUEST",
+                    "files": filenames
+                }
+                self._loop.call_soon_threadsafe(self.channel.send, json.dumps(msg))
+                self._log(f"İndirme isteği gönderildi: {len(filenames)} dosya")
+            except Exception as e:
+                self._log(f"İstek gönderilemedi: {e}")
 
     async def create_offer(self) -> dict:
         """
@@ -452,6 +611,11 @@ class WebRTCReceiver:
                     self._log("▶️ Gönderici tarafından devam ettirildi")
                     self._pause_event.set()
                     return
+                elif data.get("type") == "STOPPED":
+                    self._log("🛑 Gönderici transferi durdurdu.")
+                    self.status = "stopped"
+                    self._transfer_done_event.set() # Release waiters
+                    return
                 
                 msg_type = data.get("type")
 
@@ -464,14 +628,23 @@ class WebRTCReceiver:
                 elif msg_type == "file_start":
                     name = data["name"]
                     size = data["size"]
-                    self._current_file = {"name": name, "size": size}
-                    self._current_hash = hashlib.sha256()
+                    index = data["index"]
+                    total = data["total"]
                     
-                    # Create save path
-                    save_file = os.path.join(self.save_path or ".", name)
-                    os.makedirs(os.path.dirname(save_file) if os.path.dirname(save_file) else ".", exist_ok=True)
-                    self._current_file_handle = open(save_file, "wb")
-                    self._log(f"Alınıyor: {name} ({size} bytes)")
+                    # Security Check
+                    target_path = os.path.join(self.save_path or ".", name)
+                    if not is_safe_path(self.save_path or ".", target_path):
+                        self._log(f"⚠️ GÜVENLİK UYARISI: Geçersiz dosya yolu '{name}'. Atlanıyor.")
+                        self._current_file = None # Reset current file state
+                        self._current_file_handle = None
+                        self._current_hash = None
+                        return
+
+                    os.makedirs(os.path.dirname(target_path) if os.path.dirname(target_path) else ".", exist_ok=True)
+                    self._current_file_handle = open(target_path, "wb")
+                    self._current_file = {"name": name, "size": size} # Keep this for progress tracking
+                    self._current_hash = hashlib.sha256()
+                    self._log(f"Alınıyor: {name} ({index+1}/{total})")
 
                 elif msg_type == "file_end":
                     if self._current_file_handle:
@@ -537,3 +710,83 @@ class WebRTCReceiver:
     def wait_for_transfer(self, timeout=None) -> bool:
         """Block until file transfer completes"""
         return self._transfer_done_event.wait(timeout=timeout)
+
+
+class SignalingClient:
+    """
+    Socket.IO based Signaling Client for P2P connection
+    """
+    def __init__(self, server_url=SIGNALING_SERVER_URL):
+        self.server_url = server_url
+        self.sio = socketio.AsyncClient()
+        self.room_id = None
+        self.on_peer_joined = None
+        self.on_offer = None
+        self.on_answer = None
+        self.on_ice = None
+        
+        @self.sio.event
+        async def connect():
+            print("[Signaling] Connected to server")
+            if self.room_id:
+                await self.sio.emit('join', {'room': self.room_id})
+
+        @self.sio.event
+        async def disconnect():
+            print("[Signaling] Disconnected from server")
+
+        @self.sio.event
+        async def peer_joined(data):
+            print(f"[Signaling] Peer joined: {data.get('sid')}")
+            if self.on_peer_joined:
+                await self.on_peer_joined(data.get('sid'))
+
+        @self.sio.event
+        async def signal(data):
+            type = data.get('type')
+            payload = data.get('data')
+            sender = data.get('sender')
+            
+            if type == 'offer':
+                if self.on_offer:
+                    await self.on_offer(payload, sender)
+            elif type == 'answer':
+                if self.on_answer:
+                    await self.on_answer(payload, sender)
+            elif type == 'ice':
+                if self.on_ice:
+                    await self.on_ice(payload, sender)
+
+    async def connect(self, room_id):
+        self.room_id = room_id
+        if not self.sio.connected:
+            await self.sio.connect(self.server_url)
+        else:
+            await self.sio.emit('join', {'room': self.room_id})
+
+    async def send_offer(self, sdp, target_sid=None):
+        await self.sio.emit('signal', {
+            'type': 'offer',
+            'data': sdp,
+            'target': target_sid,
+            'room': self.room_id
+        })
+
+    async def send_answer(self, sdp, target_sid=None):
+        await self.sio.emit('signal', {
+            'type': 'answer',
+            'data': sdp,
+            'target': target_sid,
+            'room': self.room_id
+        })
+
+    async def send_ice(self, candidate, target_sid=None):
+        await self.sio.emit('signal', {
+            'type': 'ice',
+            'data': candidate,
+            'target': target_sid,
+            'room': self.room_id
+        })
+    
+    async def close(self):
+        await self.sio.disconnect()

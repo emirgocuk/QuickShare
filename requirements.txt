@@ -1,20 +1,14 @@
-# QuickShare Dependencies
-
-# Web Framework
-Flask==3.0.0
-Werkzeug==3.0.1
-
-# HTTP Requests
-requests==2.31.0
-
-# WebRTC P2P
-aiortc
-
-# GUI
+flask
 customtkinter
-
-# Build Tool
-pyinstaller==6.3.0
-
-# Optional: UPX compression for smaller exe
-# upx-windows (manuel indirilmeli)
+requests
+qrcode
+netifaces
+screeninfo
+pillow
+tkinterdnd2
+pyinstaller
+aiortc
+aiohttp
+pystray
+Pillow
+python-socketio[client]

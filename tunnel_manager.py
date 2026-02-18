@@ -10,7 +10,7 @@ import os
 import sys
 from typing import Optional
 from threading import Thread
-from config import CLOUDFLARED_BINARY, CLOUDFLARED_STARTUP_TIMEOUT, SERVER_PORT
+from config import CLOUDFLARED_BINARY, CLOUDFLARED_STARTUP_TIMEOUT, SERVER_PORT, CF_TUNNEL_TOKEN, CF_TUNNEL_URL
 
 
 class TunnelManager:
@@ -45,25 +45,41 @@ class TunnelManager:
         
         return cloudflared_path
         
-    def start(self) -> str:
+    def start(self, token: Optional[str] = None) -> str:
         """
         Cloudflared tunnel başlat ve public URL al
         
+        Args:
+            token: Cloudflare Zero Trust tunnel token (opsiyonel)
+        
         Returns:
-            Public URL (örn: https://abc123.trycloudflare.com)
+            Public URL (örn: https://abc123.trycloudflare.com veya custom domain)
             
         Raises:
             RuntimeError: Tunnel başlatılamazsa veya URL alınamazsa
         """
         cloudflared_path = self._get_cloudflared_path()
         
-        # Cloudflared komutunu hazırla
-        cmd = [
-            cloudflared_path,
-           "tunnel",
-            "--url", f"http://127.0.0.1:{self.port}",
-            "--no-autoupdate"
-        ]
+        # Token varsa öncelikli kullan
+        effective_token = token or CF_TUNNEL_TOKEN
+        
+        if effective_token:
+            cmd = [
+                cloudflared_path,
+                "tunnel",
+                "run",
+                "--token", effective_token
+            ]
+            self.public_url = CF_TUNNEL_URL
+            self._url_found = True # URL config'den geliyor, aramaya gerek yok
+        else:
+            # Token yoksa trycloudflare kullan (Legacy)
+            cmd = [
+                cloudflared_path,
+                "tunnel",
+                "--url", f"http://127.0.0.1:{self.port}",
+                "--no-autoupdate"
+            ]
         
         try:
             # Process'i başlat (stdout ve stderr'ı yakala)
@@ -81,6 +97,11 @@ class TunnelManager:
             url_thread.start()
             
             # URL bulunana kadar bekle (timeout ile)
+            # Eğer token varsa ve URL config'den geliyorsa bekleme yapma
+            if effective_token and self.public_url:
+                time.sleep(2) # Tunnel'ın ayağa kalkması için kısa bekleme
+                return self.public_url
+
             start_time = time.time()
             while not self._url_found:
                 if time.time() - start_time > CLOUDFLARED_STARTUP_TIMEOUT:

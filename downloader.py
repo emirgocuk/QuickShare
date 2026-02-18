@@ -192,19 +192,23 @@ class Downloader:
         log_callback: Optional[Callable[[str], None]] = None
     ):
         """
-        Tüm dosyaları sırayla indir (Resumable)
-        
-        Args:
-            url: Server base URL
-            save_path: Kaydedilecek klasör
-            progress_callback: Progress callback (downloaded_bytes, total_bytes, speed)
-            
-        Raises:
-            requests.RequestException: İndirme hatası
+        Tüm dosyaları sırayla indir
         """
         # Önce dosya listesini al
         files = self.get_file_list(url)
-        
+        self.download_files(files, url, save_path, progress_callback, log_callback)
+
+    def download_files(
+        self,
+        files: List[dict],
+        url: str,
+        save_path: str,
+        progress_callback: Optional[Callable[[int, int, float], None]] = None,
+        log_callback: Optional[Callable[[str], None]] = None
+    ):
+        """
+        Belirli dosyaları indir
+        """
         # Toplam boyut hesapla
         total_size = sum(f['size'] for f in files)
         
@@ -216,10 +220,15 @@ class Downloader:
         self.transfer_start_time = start_time
         self.hash_results = {}  # Reset
         
+        finished_files_size = 0
+        total_files = len(files)
+        
         # Her dosya için callback wrapper
         def file_progress_wrapper(file_downloaded, file_total, file_speed, current_file_idx, total_files_count):
             nonlocal total_downloaded
             
+            # current_total calculation logic needs to be accurate
+            # We assume finished_files_size is accurate
             current_total = finished_files_size + file_downloaded
             
             elapsed = time.time() - start_time
@@ -227,9 +236,6 @@ class Downloader:
             
             if progress_callback:
                 progress_callback(current_total, total_size, avg_speed, current_file_idx, total_files_count)
-
-        finished_files_size = 0
-        total_files = len(files)
 
         for i, file in enumerate(files):
             msg = f"Downloading {file['name']} ({i+1}/{total_files})..."
@@ -264,7 +270,7 @@ class Downloader:
                 filename=file['name'], size=file['size'],
                 direction="receive", status="success",
                 hash_value=hash_status,
-                duration_sec=duration / total_files,
+                duration_sec=duration / total_files if total_files > 0 else 0,
                 avg_speed=avg_speed, method="http"
             )
     

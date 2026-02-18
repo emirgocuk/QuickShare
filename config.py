@@ -52,3 +52,54 @@ ERROR_COLOR = "#D62246"
 # Debug
 DEBUG = True                       # False yapılacak production'da
 LOG_LEVEL = "INFO"                 # DEBUG, INFO, WARNING, ERROR
+
+# Tunnel Configuration
+CF_TUNNEL_TOKEN = ""
+CF_TUNNEL_URL = ""
+DUCKDNS_DOMAIN = ""
+DUCKDNS_TOKEN = ""
+USE_DUCKDNS = False
+
+SIGNALING_SERVER_URL = "https://quickshare-signal.onrender.com"
+
+# Load config from file if exists
+import json
+import os
+
+CONFIG_FILE = "config.json"
+
+def load_config():
+    global CF_TUNNEL_TOKEN, CF_TUNNEL_URL, DUCKDNS_DOMAIN, DUCKDNS_TOKEN, USE_DUCKDNS
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                data = json.load(f)
+                CF_TUNNEL_TOKEN = data.get("cf_tunnel_token", "")
+                CF_TUNNEL_URL = data.get("cf_tunnel_url", "")
+                DUCKDNS_DOMAIN = data.get("duckdns_domain", "")
+                DUCKDNS_TOKEN = data.get("duckdns_token", "")
+                USE_DUCKDNS = data.get("use_duckdns", False)
+        except:
+            pass
+
+def save_config(cf_token, cf_url, duckdns_domain="", duckdns_token="", use_duckdns=False):
+    global CF_TUNNEL_TOKEN, CF_TUNNEL_URL, DUCKDNS_DOMAIN, DUCKDNS_TOKEN, USE_DUCKDNS
+    CF_TUNNEL_TOKEN = cf_token
+    CF_TUNNEL_URL = cf_url
+    DUCKDNS_DOMAIN = duckdns_domain
+    DUCKDNS_TOKEN = duckdns_token
+    USE_DUCKDNS = use_duckdns
+    
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump({
+                "cf_tunnel_token": cf_token,
+                "cf_tunnel_url": cf_url,
+                "duckdns_domain": duckdns_domain,
+                "duckdns_token": duckdns_token,
+                "use_duckdns": use_duckdns
+            }, f)
+    except:
+        pass
+
+load_config()
