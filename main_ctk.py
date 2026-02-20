@@ -498,25 +498,34 @@ class QuickShareApp(Tk):
             # Generate Room ID
             room_id = ''.join(random.choices(string.digits, k=6))
             
-            # Initialize Signaling Client
-            signaling = SignalingClient()
-            # We need to run signaling connect in a loop or await it? 
-            # SignalingClient methods are async. We need an event loop.
-            # WebRTCSender runs its own loop. We can use that?
-            # Or run everything in a new loop here?
-            
-            # Better: Create WebRTCSender, it creates a loop. 
-            # Then run signaling setup inside that loop?
-            # No, WebRTCSender.start() starts a thread with a loop.
-            
+            # Get loop ready then initialize Signaling Client
             self.webrtc_sender = WebRTCSender()
             self.webrtc_sender.start() # Starts thread
             self.webrtc_sender.wait_until_ready() # Wait for loop
             
+            # Build and set file list for WebRTC sender
+            from utils import get_files_from_directory
+            file_list = []
+            for path in self.selected_files:
+                if os.path.isfile(path):
+                    file_list.append({"name": os.path.basename(path), "path": path, "size": os.path.getsize(path)})
+                elif os.path.isdir(path):
+                    for f in get_files_from_directory(path):
+                        rel = os.path.relpath(f, path)
+                        file_list.append({"name": rel, "path": f, "size": os.path.getsize(f)})
+            self.webrtc_sender.set_files(file_list)
+            
+            signaling = SignalingClient(self.webrtc_sender._loop)
+            
             # Helper to run async in sender's loop
             async def setup_async():
-                await signaling.connect(room_id)
-                self.webrtc_sender.setup_signaling(signaling)
+                try:
+                    await signaling.connect(room_id)
+                    self.webrtc_sender.setup_signaling(signaling)
+                except Exception as e:
+                    print(f"Sinyal sunucusu bağlantı hatası: {e}")
+                    self.after(0, lambda: messagebox.showerror("Bağlantı Hatası", f"Sinyal sunucusuna bağlanılamadı: {e}"))
+                    self.after(0, self.stop_sharing)
                 
             asyncio.run_coroutine_threadsafe(setup_async(), self.webrtc_sender._loop)
             
@@ -603,40 +612,65 @@ class QuickShareApp(Tk):
              receiver.start() # Start loop
              receiver.wait_until_ready() # Wait for loop
              
-             signaling = SignalingClient()
+             signaling = SignalingClient(receiver._loop)
              
              async def setup_async():
-                 await signaling.connect(code)
-                 receiver.setup_signaling(signaling)
-                 await receiver.connect_via_signaling()
+                 try:
+                     await signaling.connect(code)
+                     receiver.setup_signaling(signaling)
+                     await receiver.connect_via_signaling()
+                 except Exception as e:
+                     self.after(0, self.log_message, f"Sinyal sunucusu hatası: {e}")
+                     receiver.stop()
                  
              asyncio.run_coroutine_threadsafe(setup_async(), receiver._loop)
              
              # Setup callbacks
              receiver.log_callback = lambda msg: self.after(0, self.log_message, msg)
              
-             receiver.progress_callback = lambda r, t, s, f, tf: self.after(0, self.update_receive_progress, r, t, s, f, tf)
+             def _p2p_progress(r, t, s, f, tf):
+                 pct = (r / t * 100) if t else 0
+                 eta = calculate_eta(t, r, s)
+                 self.after(0, self.update_progress, pct, s, f, tf, eta)
+             receiver.progress_callback = _p2p_progress
              
-             receiver.save_path = filedialog.askdirectory(title="Kaydedilecek Klasörü Seçin")
-             if not receiver.save_path:
-                 self.log_message("İptal edildi.")
-                 receiver.stop()
-                 return
+             # Wait for DataChannel connection
+             if not receiver.wait_for_connection(timeout=30):
+                 raise Exception("P2P bağlantısı zaman aşımına uğradı")
+             
+             if receiver.status == "failed":
+                 raise Exception("P2P bağlantısı kurulamadı")
+             
+             self.after(0, self.log_message, "P2P bağlantısı kuruldu! Dosya listesi bekleniyor...")
+             
+             # Wait for file list from sender
+             if not receiver._file_list_event.wait(timeout=30):
+                 raise Exception("Dosya listesi alınamadı (zaman aşımı)")
+             
+             # Populate UI with received file list
+             self.remote_files = [{'name': f['name'], 'size': f['size']} for f in receiver._file_list]
+             
+             def populate_ui():
+                 self.remote_files_tree.clear()
+                 for f in self.remote_files:
+                     self.remote_files_tree.add_path_item(f['name'], size_str=format_size(f['size']), data=f)
+                 self.connect_btn.configure(state="normal", text="Bağlan")
+                 self.connect_code_btn.configure(state="normal", text="Bağlandı ✅")
+                 self.connect_code_btn.configure(state="disabled")
+                 self.status_label.configure(text="🟢 P2P Bağlandı", text_color="#06A77D")
+             
+             self.after(0, populate_ui)
+             
+             # Store receiver for later use by start_download
+             self._p2p_receiver = receiver
+             self._p2p_available = True
                  
-             # Wait for transfer
-             # The connect_via_signaling starts the process. 
-             # Receiver automatically accepts files if protocol follows.
-             # Wait for done
-             receiver.wait_for_transfer()
-             
-             self.after(0, self.log_message, "Transfer tamamlandı.")
-             receiver.stop()
-             
         except Exception as e:
              self.after(0, self.log_message, f"Hata: {e}")
         finally:
              self.after(0, lambda: self.connect_btn.configure(state="normal", text="Bağlan"))
              self.after(0, lambda: self.connect_code_btn.configure(state="normal"))
+
 
     def start_sharing(self):
         if not self.selected_files:
@@ -897,11 +931,45 @@ class QuickShareApp(Tk):
         
         files_to_download = selected_data # List of dicts
         
-        # Try P2P first if available
-        if getattr(self, '_p2p_available', False):
+        # Check if we have an active P2P receiver from code connection
+        if hasattr(self, '_p2p_receiver') and self._p2p_receiver and self._p2p_receiver.status == "connected":
+            threading.Thread(target=self._p2p_code_download_thread, args=(save_path, files_to_download), daemon=True).start()
+        # Try P2P via HTTP signal if available
+        elif getattr(self, '_p2p_available', False) and not hasattr(self, '_p2p_receiver'):
             threading.Thread(target=self._p2p_download_thread, args=(save_path, files_to_download), daemon=True).start()
         else:
             threading.Thread(target=self._download_thread, args=(save_path, files_to_download), daemon=True).start()
+
+    def _p2p_code_download_thread(self, save_path, files_to_download):
+        """Download files via already-connected P2P receiver (code-based connection)"""
+        try:
+            receiver = self._p2p_receiver
+            receiver.save_path = save_path
+            self._download_start_time = time.time()
+            
+            self.after(0, lambda: self.status_label.configure(text="🟢 P2P İndiriliyor...", text_color="#06A77D"))
+            self.after(0, lambda: self.log_message("P2P ile indirme başlıyor..."))
+            
+            # Send download request with selected filenames
+            filenames = [f['name'] for f in files_to_download]
+            receiver.request_download(filenames)
+            
+            # Wait for transfer to complete
+            receiver.wait_for_transfer(timeout=None)
+            
+            if receiver.status == "stopped":
+                raise Exception("Gönderici transferi durdurdu.")
+            
+            self.after(0, self._on_download_complete, save_path)
+            receiver.stop()
+            self._p2p_receiver = None
+            
+        except Exception as e:
+            err_msg = str(e)
+            self.after(0, lambda: self.log_message(f"P2P indirme hatası: {err_msg}"))
+        finally:
+            self.after(0, self._reset_download_ui)
+
 
     def _p2p_download_thread(self, save_path, files_to_download):
         """Download files via WebRTC P2P DataChannel"""

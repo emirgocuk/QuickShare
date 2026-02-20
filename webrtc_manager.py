@@ -207,7 +207,9 @@ class WebRTCSender:
 
                     elif data.get("type") == "ready":
                         self._receiver_ready.set()
-                        # self._log("Alıcı hazır, transfer başlıyor...") # Moved to async loop
+                        self._log("Alıcı hazır, dosya listesi gönderiliyor...")
+                        # Auto-start file sending when receiver is ready
+                        asyncio.ensure_future(self._send_files_async())
                 except json.JSONDecodeError:
                     self._log(f"Alıcıdan bilinmeyen mesaj: {message}")
                 except Exception as e:
@@ -403,8 +405,10 @@ class WebRTCReceiver:
         # Events
         self._connected_event = threading.Event()
         self._transfer_done_event = threading.Event()
+        self._file_list_event = threading.Event()
         self._offer_ready = threading.Event()
         self._offer_sdp: Optional[str] = None
+        self.on_file_list: Optional[Callable] = None
         # Speed tracking
         self._speed_last_time = 0.0
         self._speed_last_bytes = 0
@@ -624,6 +628,9 @@ class WebRTCReceiver:
                     self._total_size = data["total_size"]
                     self._total_files = len(self._file_list)
                     self._log(f"Dosya listesi alındı: {self._total_files} dosya, toplam {self._total_size} bytes")
+                    self._file_list_event.set()
+                    if self.on_file_list:
+                        self.on_file_list(self._file_list)
 
                 elif msg_type == "file_start":
                     name = data["name"]
@@ -712,60 +719,97 @@ class WebRTCReceiver:
         return self._transfer_done_event.wait(timeout=timeout)
 
 
+import uuid
+import requests
+
 class SignalingClient:
     """
-    Socket.IO based Signaling Client for P2P connection
+    HTTP Polling based Signaling Client for P2P connection
     """
-    def __init__(self, server_url=SIGNALING_SERVER_URL):
+    def __init__(self, loop, server_url=SIGNALING_SERVER_URL):
         self.server_url = server_url
-        self.sio = socketio.AsyncClient()
         self.room_id = None
+        self.sid = str(uuid.uuid4())
+        self._loop = loop
         self.on_peer_joined = None
         self.on_offer = None
         self.on_answer = None
         self.on_ice = None
-        
-        @self.sio.event
-        async def connect():
-            print("[Signaling] Connected to server")
-            if self.room_id:
-                await self.sio.emit('join', {'room': self.room_id})
-
-        @self.sio.event
-        async def disconnect():
-            print("[Signaling] Disconnected from server")
-
-        @self.sio.event
-        async def peer_joined(data):
-            print(f"[Signaling] Peer joined: {data.get('sid')}")
-            if self.on_peer_joined:
-                await self.on_peer_joined(data.get('sid'))
-
-        @self.sio.event
-        async def signal(data):
-            type = data.get('type')
-            payload = data.get('data')
-            sender = data.get('sender')
-            
-            if type == 'offer':
-                if self.on_offer:
-                    await self.on_offer(payload, sender)
-            elif type == 'answer':
-                if self.on_answer:
-                    await self.on_answer(payload, sender)
-            elif type == 'ice':
-                if self.on_ice:
-                    await self.on_ice(payload, sender)
+        self._polling_task = None
+        self._is_closing = False
+        import aiohttp # Ensure it's available for the async loop
+        self.aiohttp = aiohttp
 
     async def connect(self, room_id):
         self.room_id = room_id
-        if not self.sio.connected:
-            await self.sio.connect(self.server_url)
-        else:
-            await self.sio.emit('join', {'room': self.room_id})
+        self._is_closing = False
+        
+        def _connect():
+            try:
+                # Increase timeout to 60 to allow Render free tier servers to wake up
+                resp = requests.post(f"{self.server_url}/join", json={'room': self.room_id, 'sid': self.sid}, timeout=60)
+                resp.raise_for_status()
+                data = resp.json()
+                
+                if 'peers' in data and data['peers']:
+                     # We can trigger peer_joined for existing peers if we want
+                     pass
+            except Exception as e:
+                raise RuntimeError(f"HTTP Signaling Join failed: {e}")
+                
+        # Run blocking join in executor
+        await self._loop.run_in_executor(None, _connect)
+        print(f"[Signaling] Joined Room (HTTP): {self.room_id} as {self.sid}")
+        
+        # Start async polling loop
+        self._polling_task = self._loop.create_task(self._poll_loop())
+
+    async def _poll_loop(self):
+        # Use ThreadedResolver to avoid aiodns/pycares DNS failures on Windows
+        resolver = self.aiohttp.resolver.ThreadedResolver()
+        connector = self.aiohttp.TCPConnector(resolver=resolver)
+        async with self.aiohttp.ClientSession(connector=connector) as session:
+            while not self._is_closing:
+                try:
+                    async with session.get(f"{self.server_url}/poll", params={'sid': self.sid}, timeout=35) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            for msg in data.get('messages', []):
+                                await self._handle_message(msg)
+                except asyncio.TimeoutError:
+                    continue # Expected, just poll again
+                except Exception as e:
+                    if not self._is_closing:
+                        print(f"[Signaling] Poll error: {e}")
+                        await asyncio.sleep(2) # Backoff
+
+    async def _handle_message(self, msg):
+        msg_type = msg.get('type')
+        if msg_type == 'peer_joined':
+             print(f"[Signaling] Peer joined: {msg.get('sid')}")
+             if self.on_peer_joined:
+                 await self.on_peer_joined(msg.get('sid'))
+        elif msg_type == 'offer':
+             if self.on_offer:
+                 await self.on_offer(msg.get('data'), msg.get('sender'))
+        elif msg_type == 'answer':
+             if self.on_answer:
+                 await self.on_answer(msg.get('data'), msg.get('sender'))
+        elif msg_type == 'ice':
+             if self.on_ice:
+                 await self.on_ice(msg.get('data'), msg.get('sender'))
+
+    async def _post_signal(self, payload):
+        def _post():
+            try:
+                requests.post(f"{self.server_url}/signal", json=payload, timeout=20)
+            except Exception as e:
+                print(f"[Signaling] Post error: {e}")
+        await self._loop.run_in_executor(None, _post)
 
     async def send_offer(self, sdp, target_sid=None):
-        await self.sio.emit('signal', {
+        await self._post_signal({
+            'sender': self.sid,
             'type': 'offer',
             'data': sdp,
             'target': target_sid,
@@ -773,7 +817,8 @@ class SignalingClient:
         })
 
     async def send_answer(self, sdp, target_sid=None):
-        await self.sio.emit('signal', {
+        await self._post_signal({
+            'sender': self.sid,
             'type': 'answer',
             'data': sdp,
             'target': target_sid,
@@ -781,7 +826,8 @@ class SignalingClient:
         })
 
     async def send_ice(self, candidate, target_sid=None):
-        await self.sio.emit('signal', {
+        await self._post_signal({
+            'sender': self.sid,
             'type': 'ice',
             'data': candidate,
             'target': target_sid,
@@ -789,4 +835,6 @@ class SignalingClient:
         })
     
     async def close(self):
-        await self.sio.disconnect()
+        self._is_closing = True
+        if self._polling_task:
+            self._polling_task.cancel()
