@@ -22,7 +22,7 @@ CLOUDFLARED_BINARY = "bin/cloudflared.exe"
 CLOUDFLARED_STARTUP_TIMEOUT = 30   # Tunnel URL alınana kadar max bekleme (saniye)
 
 # WebRTC P2P Ayarları
-WEBRTC_CHUNK_SIZE = 64 * 1024  # 64KB per DataChannel message
+WEBRTC_CHUNK_SIZE = 16 * 1024  # 16KB per DataChannel message (smaller = better SCTP throughput)
 ICE_SERVERS = [
     {"urls": "stun:stun.l.google.com:19302"},
     {"urls": "stun:stun1.l.google.com:19302"},

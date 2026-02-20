@@ -325,28 +325,26 @@ class WebRTCSender:
                     if not chunk:
                         break
 
-                    # Wait for buffer to drain if needed
-                    while self.channel.bufferedAmount > WEBRTC_CHUNK_SIZE * 16:
-                        await asyncio.sleep(0.01)
+                    # Wait for buffer to drain if needed (backpressure)
+                    while self.channel.bufferedAmount > WEBRTC_CHUNK_SIZE * 4:
+                        await asyncio.sleep(0.05)
 
                     self.channel.send(chunk)
                     file_hash.update(chunk)
                     file_sent += len(chunk)
                     total_sent += len(chunk)
 
-                    # Progress callback with speed
+                    # Progress callback (throttled to avoid GUI overhead)
                     if self.progress_callback:
                         now = time.time()
                         elapsed = now - self._speed_last_time
-                        if elapsed >= 0.3:
-                            byte_diff = total_sent - self._speed_last_bytes
-                            self._current_speed = byte_diff / elapsed
+                        if elapsed >= 0.5 or self._speed_last_time == 0:
+                            if self._speed_last_time > 0:
+                                byte_diff = total_sent - self._speed_last_bytes
+                                self._current_speed = byte_diff / elapsed
                             self._speed_last_time = now
                             self._speed_last_bytes = total_sent
-                        elif self._speed_last_time == 0:
-                            self._speed_last_time = now
-                            self._speed_last_bytes = total_sent
-                        self.progress_callback(total_sent, total_size, self._current_speed, i + 1, len(self.files))
+                            self.progress_callback(total_sent, total_size, self._current_speed, i + 1, len(self.files))
 
             # 4. FILE_END
             end_msg = {
