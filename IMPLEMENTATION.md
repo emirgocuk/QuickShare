@@ -455,3 +455,181 @@ Bu projeyi tamamladığında şunları öğrenmiş olacaksın:
 - Error handling best practices
 
 İyi çalışmalar! 🚀
+
+---
+---
+
+# 🔮 QuickShare v2.0 — İyileştirme Yol Haritası
+
+> Yukarıdaki fazlar tamamlandı. Aşağıdaki yol haritası projeyi production-ready seviyesine taşımak içindir.
+
+---
+
+## FAZ 7: P2P Transfer Performansı ⚡
+
+**Hedef:** Transfer hızını 258 KB/s → 5-15 MB/s çıkarmak  
+**Durum:** ✅ TAMAMLANDI
+
+### Yapılan Değişiklikler (İlk Aşama)
+
+- [x] `config.py` — Chunk boyutu 16KB → 64KB (Geçici genel iyileştirme)
+- [x] `webrtc_manager.py` — Buffer threshold `CHUNK_SIZE*4` → `CHUNK_SIZE*16` (1 MB)  
+- [x] `webrtc_manager.py` — Adaptive sleep: sabit 50ms → 1-50ms exponential backoff
+- [x] ~~Unordered DataChannel~~ — İPTAL (raw binary'de sıra bozulursa dosya çöker)
+
+### Yapılacaklar (İleri Seviye)
+
+- [ ] **Adaptive Chunking (Dinamik Parçalama)** — `webrtc_manager.py`
+  - Dosya boyutuna göre chunk belirleme (Küçük dosyalar için 16-32KB, devasa dosyalar için 128-256KB max)
+  - Ağ darboğazına (congestion) göre anlık chunk boyutu büyütme/küçültme
+- [ ] **Binary Header Optimizasyonu** — `webrtc_manager.py`
+  - Dosya metadatalarını JSON yerine raw binary gönderme
+
+---
+
+## FAZ 8: Güvenilirlik & Hata Yönetimi 🔄
+
+**Hedef:** Kesilmelerde otomatik devam, veri doğrulama  
+**Durum:** ⬜ BEKLEMEDE
+
+### Yapılacaklar
+
+- [ ] **Transfer Resume** — `webrtc_manager.py`, `downloader.py`
+  - Dosya offset tracking
+  - HTTP `Range` header desteği
+  - Yarım kalan dosyayı kaldığı yerden devam
+- [ ] **Chunk Hash Doğrulama** — `webrtc_manager.py`
+  - Her N chunk'ta mini-hash
+  - Bozuk veri algılama ve yeniden isteme
+- [ ] **Otomatik Yeniden Bağlanma** — `webrtc_manager.py`
+  - ICE restart mekanizması
+  - 3 deneme sonra HTTP fallback
+- [ ] **Heartbeat/Ping-Pong** — `webrtc_manager.py`
+  - Her 5 saniyede ping
+  - Stale bağlantı algılama (15s timeout)
+- [ ] **Graceful Error Handling** — `main_ctk.py`
+  - Tüm thread'lere try/catch
+  - UI'da anlamlı hata mesajları (messagebox yerine toast)
+
+---
+
+## FAZ 9: Güvenlik & Şifreleme 🔒
+
+**Hedef:** Uçtan uca iletişim güvenliği  
+**Durum:** ⬜ BEKLEMEDE
+
+### Yapılacaklar
+
+- [ ] **E2E Şifreleme** — `webrtc_manager.py`
+  - DTLS zaten var, ek AES-256-GCM katmanı (opsiyonel)
+- [ ] **Transfer Şifresi** — `server.py`, `main_ctk.py`
+  - Opsiyonel parola koruması (PIN ile link paylaşımı)
+- [ ] **Token Doğrulama** — `server.py`
+  - Her indirme isteği için tek kullanımlık token
+- [ ] **Rate Limiting** — `server.py`
+  - IP bazlı istek limiti (brute-force koruması)
+
+---
+
+## FAZ 10: Ağ Dayanıklılığı & NAT Traversal 🌐
+
+**Hedef:** Her ağ topolojisinde çalışma  
+**Durum:** ⬜ BEKLEMEDE
+
+### Yapılacaklar
+
+- [ ] **TURN Sunucusu** — `config.py`
+  - Ücretsiz TURN (Metered.ca veya self-hosted coturn)
+  - Simetrik NAT arkasında P2P imkanı
+- [ ] **NAT Tipi Algılama** — Yeni: `nat_detector.py`
+  - STUN ile NAT tipi tespit (Cone/Symmetric)
+  - UI'da bilgi gösterimi
+- [ ] **ICE Candidate Filtering** — `webrtc_manager.py`
+  - Relay-only mod (simetrik NAT durumunda)
+- [ ] **Çoklu Sinyal Sunucusu** — `config.py`
+  - Yedek signaling URL'leri (Render down olursa fallback)
+- [ ] **Bağlantı Kalitesi** — `main_ctk.py`
+  - Ping, jitter, paket kaybı → sidebar'da göster
+
+---
+
+## FAZ 11: UX & Kullanılabilirlik ✨
+
+**Hedef:** Profesyonel kullanıcı deneyimi  
+**Durum:** ⬜ BEKLEMEDE
+
+### Yapılacaklar
+
+- [ ] **Toast Bildirimleri** — Yeni: `toast.py`
+  - `messagebox` yerine modern toast notification
+- [ ] **QR Kod** — `main_ctk.py`
+  - Paylaşım kodu/linki için QR kod gösterme
+- [ ] **Dosya Önizleme** — `main_ctk.py`
+  - Resim/video thumbnail
+- [ ] **Tema Sistemi** — `main_ctk.py`
+  - Light / Dark / System tema seçeneği
+- [ ] **Sürükle-Bırak İyileştirme** — `main_ctk.py`
+  - Drop zone overlay animasyonu
+- [ ] **Dosya Bazlı Progress** — `ui_components.py`
+  - TreeView'da her dosya için minik progress bar
+- [ ] **İndirme Geçmişi Detay** — `history_frame.py`
+  - Grafik, istatistik, dosya bazlı hız analizi
+
+---
+
+## FAZ 12: Ölçeklenebilirlik & Yeni Özellikler 🚀
+
+**Hedef:** Çoklu cihaz, klasör senkronizasyonu  
+**Durum:** ⬜ BEKLEMEDE
+
+### Yapılacaklar
+
+- [ ] **Çoklu Peer** — `webrtc_manager.py`
+  - Aynı anda birden fazla alıcıya gönderim
+- [ ] **Klasör İzleme** — Yeni: `folder_watcher.py`
+  - watchdog ile klasör değişikliği algılama
+  - Otomatik paylaşım
+- [ ] **Sıkıştırma** — `webrtc_manager.py`
+  - Opsiyonel zstd/lz4 sıkıştırma
+  - Tekst dosyalarında %60-80 kazanç
+- [ ] **Chunked Upload API** — `server.py`
+  - Büyük dosyaları parçalı upload
+
+---
+
+## FAZ 13: Üretim Kalitesi & Dağıtım 📦
+
+**Hedef:** Taşınabilir, güncellenebilir, izlenebilir uygulama  
+**Durum:** ⬜ BEKLEMEDE
+
+### Yapılacaklar
+
+- [ ] **Yapılandırılmış Loglama** — Yeni: `logger.py`
+  - `print()` → `logging` modülü
+  - Log dosyası + log seviyeleri
+- [ ] **Otomatik Güncelleme** — Yeni: `updater.py`
+  - GitHub Releases API ile versiyon kontrolü
+- [ ] **Tek Dosya EXE** — `build_ctk.py`
+  - Nuitka/PyInstaller ile optimize build
+- [ ] **Windows Installer** — Yeni: `installer.iss`
+  - Inno Setup ile kurulum sihirbazı
+- [ ] **Hata Raporlama** — `main_ctk.py`
+  - Crash handler + hata log dosyası
+- [ ] **Birim Testleri** — `tests/`
+  - WebRTC, Downloader, Server için pytest suite
+
+---
+
+## 📊 v2.0 Zaman Tahmini
+
+| Faz | Süre | Öncelik |
+|-----|------|---------|
+| FAZ 7 — Performans | ✅ Tamamlandı | 🔴 Kritik |
+| FAZ 8 — Güvenilirlik | ~2 oturum | 🔴 Kritik |
+| FAZ 9 — Güvenlik | ~1 oturum | 🟡 Orta |
+| FAZ 10 — NAT Traversal | ~2 oturum | 🟡 Orta |
+| FAZ 11 — UX | ~2 oturum | 🟢 Düşük |
+| FAZ 12 — Özellikler | ~3 oturum | 🟢 Düşük |
+| FAZ 13 — Üretim | ~2 oturum | 🟡 Orta |
+
+> **Önerilen sıra:** 7 → 8 → 10 → 9 → 11 → 12 → 13

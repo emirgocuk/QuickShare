@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickShare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- Custom Tailwind Config for Dark Slate Theme -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#0D1117',
+                        surface: '#161B22',
+                        surfaceHover: '#21262D',
+                        primary: '#3b82f6',
+                        primaryHover: '#2563eb',
+                        secondary: '#10b981',
+                        secondaryHover: '#059669',
+                        warning: '#E67E22',
+                        warningHover: '#D35400',
+                        textPrimary: '#c9d1d9',
+                        textMuted: '#8b949e',
+                        border: '#30363d'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Segoe UI', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-background text-textPrimary h-screen flex overflow-hidden font-sans">
+
+    <!-- Sidebar -->
+    <nav class="w-64 bg-surface border-r border-border h-full flex flex-col pt-8">
+        <div class="px-6 mb-8 flex items-center gap-3">
+            <i class="fa-solid fa-bolt text-warning text-xl"></i>
+            <h1 class="text-2xl font-bold text-white tracking-tight">QuickShare</h1>
+        </div>
+
+        <div class="flex-1 flex flex-col gap-2 px-4">
+            <button onclick="switchTab('home')" id="tab-home" class="nav-btn active">
+                <i class="fa-solid fa-house w-6 text-center"></i> Ana Sayfa
+            </button>
+            <button onclick="switchTab('send')" id="tab-send" class="nav-btn">
+                <i class="fa-solid fa-paper-plane w-6 text-center"></i> Gönder
+            </button>
+            <button onclick="switchTab('receive')" id="tab-receive" class="nav-btn">
+                <i class="fa-solid fa-download w-6 text-center"></i> Al
+            </button>
+            <button onclick="switchTab('history')" id="tab-history" class="nav-btn">
+                <i class="fa-solid fa-clock-rotate-left w-6 text-center"></i> Geçmiş
+            </button>
+        </div>
+
+        <div class="p-4 border-t border-border">
+            <button onclick="switchTab('settings')" id="tab-settings"
+                class="nav-btn w-full text-textMuted hover:text-white">
+                <i class="fa-solid fa-gear w-6 text-center"></i> Ayarlar
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 h-full overflow-y-auto bg-background relative">
+
+        <!-- HOME TAB -->
+        <section id="view-home" class="page-view active min-h-full p-10 flex flex-col">
+            <h2 class="text-3xl font-bold text-white mb-2">Hoşgeldiniz</h2>
+            <p class="text-textMuted mb-10">Dosyalarınızı sınır olmadan özgürce paylaşın.</p>
+
+            <div class="grid grid-cols-2 gap-6 mb-10">
+                <div class="glass-card p-6 border border-border rounded-2xl relative overflow-hidden">
+                    <div
+                        class="absolute top-0 right-0 w-32 h-32 bg-primary opacity-10 rounded-full blur-3xl -mr-10 -mt-10">
+                    </div>
+                    <div class="flex items-center gap-4 mb-4">
+                        <div
+                            class="w-12 h-12 rounded-xl bg-surface flex items-center justify-center border border-border">
+                            <i class="fa-solid fa-shield-check text-primary text-xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold text-white">Sistem Durumu</h3>
+                    </div>
+                    <p class="text-textMuted text-lg" id="system-status">Hazır ve Beklemede</p>
+                </div>
+
+                <div class="glass-card p-6 border border-border rounded-2xl relative overflow-hidden">
+                    <div
+                        class="absolute top-0 right-0 w-32 h-32 bg-secondary opacity-10 rounded-full blur-3xl -mr-10 -mt-10">
+                    </div>
+                    <div class="flex items-center gap-4 mb-4">
+                        <div
+                            class="w-12 h-12 rounded-xl bg-surface flex items-center justify-center border border-border">
+                            <i class="fa-solid fa-bolt text-secondary text-xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold text-white">Ağ Hızı</h3>
+                    </div>
+                    <p class="text-textMuted text-lg">P2P Bağlantısı Bekleniyor</p>
+                </div>
+            </div>
+
+            <div class="flex gap-4">
+                <button onclick="switchTab('send')"
+                    class="btn-primary py-4 px-8 rounded-xl font-bold flex items-center gap-3">
+                    <i class="fa-solid fa-plus"></i> Yeni Dosya Gönder
+                </button>
+                <button onclick="switchTab('receive')"
+                    class="btn-secondary py-4 px-8 rounded-xl font-bold flex items-center gap-3">
+                    <i class="fa-solid fa-download"></i> Kodu Gir
+                </button>
+            </div>
+        </section>
+
+        <!-- SEND TAB -->
+        <section id="view-send" class="page-view hidden min-h-full p-10 flex flex-col">
+            <h2 class="text-3xl font-bold text-white mb-2">Gönderim Merkezi</h2>
+            <p class="text-textMuted mb-8">Dosyaları aşağıdaki alana sürükleyip bırakabilir veya üstteki butonları
+                kullanabilirsiniz.</p>
+
+            <!-- List/Drop Zone -->
+            <div class="flex-1 min-h-[300px] mb-6 border-2 border-dashed border-border rounded-2xl bg-surface/50 flex flex-col overflow-hidden relative"
+                id="drop-zone">
+
+                <!-- Tools -->
+                <div class="p-4 border-b border-border flex justify-between items-center bg-surface">
+                    <div class="flex gap-3">
+                        <button onclick="apiSelectFiles()"
+                            class="text-sm px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg font-medium transition-colors">
+                            <i class="fa-solid fa-file-circle-plus mr-2"></i> Dosya Seç
+                        </button>
+                        <button onclick="apiSelectFolder()"
+                            class="text-sm px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg font-medium transition-colors">
+                            <i class="fa-solid fa-folder-plus mr-2"></i> Klasör Seç
+                        </button>
+                    </div>
+                    <button onclick="apiClearFiles()"
+                        class="text-sm px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg font-medium transition-colors">
+                        <i class="fa-solid fa-trash-can mr-2"></i> Temizle
+                    </button>
+                </div>
+
+                <!-- File List Body -->
+                <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-2" id="file-list">
+                    <!-- Empty State -->
+                    <div id="empty-state" class="m-auto text-center text-textMuted">
+                        <i class="fa-solid fa-cloud-arrow-up text-6xl text-border mb-4"></i>
+                        <h3 class="text-xl font-medium text-white mb-2">Dosyaları Buraya Sürükleyin</h3>
+                        <p>veya üstteki butonlardan seçin</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Flow Buttons -->
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="apiStartCloudShare()"
+                    class="h-20 bg-surface border border-border hover:border-primary hover:bg-surfaceHover rounded-2xl flex flex-col items-center justify-center transition-all group">
+                    <span
+                        class="text-lg font-bold text-white group-hover:text-primary transition-colors flex items-center gap-2"><i
+                            class="fa-solid fa-cloud"></i> Bulut Linki Oluştur</span>
+                    <span class="text-textMuted text-sm">Sunucu Üzerinden (URL - Max 100MB)</span>
+                </button>
+
+                <button onclick="apiStartDirectShare()"
+                    class="h-20 bg-surface border border-border hover:border-warning hover:bg-surfaceHover rounded-2xl flex flex-col items-center justify-center transition-all group">
+                    <span
+                        class="text-lg font-bold text-white group-hover:text-warning transition-colors flex items-center gap-2"><i
+                            class="fa-solid fa-bolt"></i> Doğrudan Cihaza Aktar</span>
+                    <span class="text-textMuted text-sm">P2P Kod ile Sınırsız Hız & Boyut</span>
+                </button>
+            </div>
+
+            <!-- Transfer Status Modal/Card (Hidden by default) -->
+            <div id="transfer-status" class="hidden mt-6 bg-surface border border-border rounded-xl p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2" id="transfer-title">
+                        <div class="animate-pulse w-3 h-3 bg-secondary rounded-full"></div>
+                        Paylaşım Aktif
+                    </h3>
+                    <div class="flex gap-2">
+                        <button
+                            class="w-10 h-10 rounded-lg bg-surfaceHover text-textMuted hover:text-white flex items-center justify-center border border-border transition-colors">
+                            <i class="fa-solid fa-pause"></i>
+                        </button>
+                        <button onclick="apiStopShare()"
+                            class="w-10 h-10 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors">
+                            <i class="fa-solid fa-stop"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mb-6">
+                    <input type="text" id="share-code" readonly
+                        class="flex-1 bg-background border border-border rounded-lg px-4 py-3 font-mono text-center text-xl text-white outline-none"
+                        value="123456">
+                    <button
+                        class="px-6 bg-surfaceHover border border-border rounded-lg text-white font-medium hover:bg-gray-700 transition-colors">
+                        <i class="fa-regular fa-copy"></i>
+                    </button>
+                </div>
+
+                <div class="flex justify-between text-sm text-textMuted">
+                    <span id="transfer-speed">Hız: 0 MB/s</span>
+                    <span id="transfer-sent">Gönderilen: 0 MB</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- RECEIVE TAB -->
+        <section id="view-receive" class="page-view hidden min-h-full p-10 flex flex-col">
+            <h2 class="text-3xl font-bold text-white mb-2">Dosya Al</h2>
+            <p class="text-textMuted mb-8">Kodu veya Linki girerek indirmeye başlayın.</p>
+
+            <div class="flex gap-4 mb-8">
+                <input type="text" id="receive-input" placeholder="6 Haneli Kod veya Link..."
+                    class="flex-1 bg-surface border border-border rounded-xl px-6 py-4 font-mono text-lg text-white outline-none focus:border-primary transition-colors">
+                <button onclick="apiConnect()" class="btn-warning px-8 rounded-xl font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-plug"></i> Bağlan
+                </button>
+            </div>
+
+            <div
+                class="flex-1 border border-border rounded-2xl bg-surface/50 p-6 flex flex-col items-center justify-center text-textMuted">
+                <i class="fa-solid fa-satellite-dish text-5xl mb-4 opacity-50"></i>
+                <p class="text-lg">Bağlantı bekleniyor...</p>
+            </div>
+        </section>
+
+        <!-- HISTORY TAB -->
+        <section id="view-history" class="page-view hidden min-h-full p-10 flex flex-col">
+            <h2 class="text-3xl font-bold text-white mb-8">Transfer Geçmişi</h2>
+
+            <div
+                class="flex-1 bg-surface border border-border rounded-2xl overflow-hidden flex items-center justify-center text-textMuted">
+                <div class="text-center">
+                    <i class="fa-solid fa-clock-rotate-left text-4xl mb-4 opacity-50"></i>
+                    <p>Geçmiş kayıtları yükleniyor...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SETTINGS TAB -->
+        <section id="view-settings" class="page-view hidden min-h-full p-10 flex flex-col">
+            <h2 class="text-3xl font-bold text-white mb-2">Ayarlar</h2>
+            <p class="text-textMuted mb-8">Uygulama yapılandırmasını buradan düzenleyebilirsiniz.</p>
+
+            <div class="flex-1 overflow-y-auto space-y-6">
+                <!-- Signaling Server -->
+                <div class="bg-surface border border-border rounded-2xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-tower-broadcast text-primary"></i> Sinyal Sunucusu
+                    </h3>
+                    <div class="space-y-3">
+                        <label class="block text-sm text-textMuted">Sinyal Sunucusu URL</label>
+                        <input type="text" id="setting-signaling-url"
+                            placeholder="https://quickshare-signal.onrender.com"
+                            class="w-full bg-background border border-border rounded-lg px-4 py-3 text-white outline-none focus:border-primary transition-colors">
+                    </div>
+                </div>
+
+                <!-- Cloudflare Tunnel -->
+                <div class="bg-surface border border-border rounded-2xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-cloud text-warning"></i> Cloudflare Tunnel
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-textMuted mb-1">Tunnel Token</label>
+                            <input type="password" id="setting-cf-token" placeholder="Token (opsiyonel)"
+                                class="w-full bg-background border border-border rounded-lg px-4 py-3 text-white outline-none focus:border-primary transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-textMuted mb-1">Tunnel URL</label>
+                            <input type="text" id="setting-cf-url" placeholder="URL (opsiyonel)"
+                                class="w-full bg-background border border-border rounded-lg px-4 py-3 text-white outline-none focus:border-primary transition-colors">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DuckDNS -->
+                <div class="bg-surface border border-border rounded-2xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-globe text-secondary"></i> DuckDNS
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="setting-use-duckdns" class="w-4 h-4 accent-secondary">
+                            <label for="setting-use-duckdns" class="text-sm text-textMuted">DuckDNS Kullan</label>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-textMuted mb-1">Domain</label>
+                            <input type="text" id="setting-duckdns-domain" placeholder="example.duckdns.org"
+                                class="w-full bg-background border border-border rounded-lg px-4 py-3 text-white outline-none focus:border-primary transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-textMuted mb-1">Token</label>
+                            <input type="password" id="setting-duckdns-token" placeholder="DuckDNS Token"
+                                class="w-full bg-background border border-border rounded-lg px-4 py-3 text-white outline-none focus:border-primary transition-colors">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="mt-6 flex justify-end">
+                <button onclick="apiSaveSettings()"
+                    class="btn-primary px-8 py-3 rounded-xl font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Kaydet
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="js/app.js"></script>
+</body>
+
+</html>

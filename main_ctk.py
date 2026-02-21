@@ -3,7 +3,7 @@ QuickShare Main Application - Modern UI with Sidebar & Drag-Drop
 """
 
 import customtkinter as ctk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 import tkinter as tk
 from tkinterdnd2 import DND_FILES, TkinterDnD
 import threading
@@ -25,11 +25,31 @@ import string
 from transfer_history import history
 from history_frame import HistoryFrame
 from tray_manager import TrayManager
-from ui_components import FileListTree
+from ui_components import FileListTree, ToastNotification
 
 # CustomTkinter appearance
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
+
+# Premium Dark Theme Colors
+COLORS = {
+    "bg": "#0D1117",
+    "surface": "#161B22",
+    "surface_hover": "#21262D",
+    "border": "#30363d",
+    "primary": "#3b82f6",
+    "primary_hover": "#2563eb",
+    "primary_glow": "#1f6feb",
+    "secondary": "#10b981",
+    "secondary_hover": "#059669",
+    "warning": "#E67E22",
+    "warning_hover": "#D35400",
+    "danger": "#ef4444",
+    "danger_hover": "#dc2626",
+    "text": "#c9d1d9",
+    "text_muted": "#8b949e",
+    "text_bright": "#ffffff",
+}
 
 
 
@@ -47,7 +67,8 @@ class QuickShareApp(Tk):
         
         # Window Setup
         self.title(WINDOW_TITLE)
-        self.geometry(f"{950}x700")  # Increased for visibility
+        self.geometry("1050x750")
+        self.configure(fg_color=COLORS["bg"])
         self.minsize(800, 600)
         
         # State
@@ -102,58 +123,76 @@ class QuickShareApp(Tk):
         
     def setup_sidebar(self):
         """Create the sidebar navigation"""
-        self.sidebar_frame = ctk.CTkFrame(self, width=140, corner_radius=0)
+        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=COLORS["surface"], border_width=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+        self.sidebar_frame.grid_rowconfigure(5, weight=1)  # Spacer row
+        
+        # Separator line on right edge
+        separator = ctk.CTkFrame(self.sidebar_frame, width=1, fg_color=COLORS["border"])
+        separator.place(relx=1.0, rely=0, relheight=1.0, anchor="ne")
         
         # Logo / Title
-        self.logo_label = ctk.CTkLabel(
-            self.sidebar_frame, 
-            text=" QuickShare", 
-            font=ctk.CTkFont(size=20, weight="bold")
-        )
-        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        logo_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        logo_frame.grid(row=0, column=0, padx=24, pady=(32, 28), sticky="w")
+        
+        ctk.CTkLabel(
+            logo_frame, text="⚡",
+            font=ctk.CTkFont(size=20),
+            text_color=COLORS["warning"]
+        ).pack(side="left", padx=(0, 8))
+        
+        ctk.CTkLabel(
+            logo_frame, text="QuickShare",
+            font=ctk.CTkFont(family="Inter", size=22, weight="bold"),
+            text_color=COLORS["text_bright"]
+        ).pack(side="left")
         
         # Navigation Buttons
-        self.sidebar_button_home = ctk.CTkButton(
-            self.sidebar_frame, text="🏠 Ana Sayfa", command=lambda: self.select_frame("home")
-        )
-        self.sidebar_button_home.grid(row=1, column=0, padx=20, pady=10)
+        nav_kwargs = {
+            "fg_color": "transparent",
+            "text_color": COLORS["text_muted"],
+            "hover_color": COLORS["surface_hover"],
+            "corner_radius": 8,
+            "anchor": "w",
+            "height": 42,
+            "font": ctk.CTkFont(family="Inter", size=14, weight="bold")
+        }
         
-        self.sidebar_button_send = ctk.CTkButton(
-            self.sidebar_frame, text="📤 Gönder", command=lambda: self.select_frame("send")
-        )
-        self.sidebar_button_send.grid(row=2, column=0, padx=20, pady=10)
+        self.sidebar_button_home = ctk.CTkButton(self.sidebar_frame, text="   🏠  Ana Sayfa", command=lambda: self.select_frame("home"), **nav_kwargs)
+        self.sidebar_button_home.grid(row=1, column=0, padx=12, pady=3, sticky="ew")
         
-        self.sidebar_button_receive = ctk.CTkButton(
-            self.sidebar_frame, text="📥 Al", command=lambda: self.select_frame("receive")
-        )
-        self.sidebar_button_receive.grid(row=3, column=0, padx=20, pady=10)
+        self.sidebar_button_send = ctk.CTkButton(self.sidebar_frame, text="   📤  Gönder", command=lambda: self.select_frame("send"), **nav_kwargs)
+        self.sidebar_button_send.grid(row=2, column=0, padx=12, pady=3, sticky="ew")
+        
+        self.sidebar_button_receive = ctk.CTkButton(self.sidebar_frame, text="   📥  Al", command=lambda: self.select_frame("receive"), **nav_kwargs)
+        self.sidebar_button_receive.grid(row=3, column=0, padx=12, pady=3, sticky="ew")
 
-        self.sidebar_button_history = ctk.CTkButton(
-            self.sidebar_frame, text="⏳ Geçmiş", command=lambda: self.select_frame("history")
-        )
-        self.sidebar_button_history.grid(row=4, column=0, padx=20, pady=10)
+        self.sidebar_button_history = ctk.CTkButton(self.sidebar_frame, text="   🕐  Geçmiş", command=lambda: self.select_frame("history"), **nav_kwargs)
+        self.sidebar_button_history.grid(row=4, column=0, padx=12, pady=3, sticky="ew")
         
-        # High Speed Toggle
-        self.speed_switch = ctk.CTkSwitch(self.sidebar_frame, text="⚡ Doğrudan P2P", command=self.toggle_p2p_mode)
-        self.speed_switch.grid(row=5, column=0, padx=20, pady=10, sticky="s")
+        # Bottom section
+        bottom_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        bottom_frame.grid(row=6, column=0, sticky="sew", padx=12, pady=(0, 8))
         
-        # Settings / Info at bottom
+        # Separator
+        ctk.CTkFrame(bottom_frame, height=1, fg_color=COLORS["border"]).pack(fill="x", pady=(0, 12))
+        
         self.sidebar_button_settings = ctk.CTkButton(
-            self.sidebar_frame, text="⚙️ Ayarlar", command=lambda: self.select_frame("settings"),
-            fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE")
+            bottom_frame, text="   ⚙️  Ayarlar", command=lambda: self.select_frame("settings"),
+            fg_color="transparent", hover_color=COLORS["surface_hover"],
+            text_color=COLORS["text_muted"], anchor="w", height=40,
+            font=ctk.CTkFont(family="Inter", size=13, weight="bold")
         )
-        self.sidebar_button_settings.grid(row=6, column=0, padx=20, pady=10)
+        self.sidebar_button_settings.pack(fill="x", pady=(0, 8))
         
         # Connection Status
         self.status_label = ctk.CTkLabel(
-            self.sidebar_frame, 
-            text="🔴 Çevrimdışı", 
-            font=ctk.CTkFont(size=12),
-            text_color="#ff5555"
+            bottom_frame, 
+            text="● Çevrimdışı", 
+            font=ctk.CTkFont(family="Inter", size=12),
+            text_color=COLORS["danger"]
         )
-        self.status_label.grid(row=7, column=0, padx=20, pady=(0, 20))
+        self.status_label.pack(anchor="w", padx=12, pady=(0, 12))
 
     def setup_pages(self):
         """Initialize all page frames"""
@@ -178,11 +217,21 @@ class QuickShareApp(Tk):
 
     def select_frame(self, name):
         """Switch active frame"""
+        # Active: subtle blue glow bg, white text. Inactive: transparent, muted text.
+        active_color = "#1f6feb15"  # Very subtle blue tint (CTK may not support alpha, fallback)
+        active_color = "#1a2332"   # Solid dark blue tint
+        inactive_color = "transparent"
+        active_text = COLORS["primary"]
+        inactive_text = COLORS["text_muted"]
+        
         # Reset button colors
-        self.sidebar_button_home.configure(fg_color=("gray75", "gray25") if name == "home" else "transparent")
-        self.sidebar_button_send.configure(fg_color=("gray75", "gray25") if name == "send" else "transparent")
-        self.sidebar_button_receive.configure(fg_color=("gray75", "gray25") if name == "receive" else "transparent")
-        self.sidebar_button_history.configure(fg_color=("gray75", "gray25") if name == "history" else "transparent")
+        for btn, btn_name in [(self.sidebar_button_home, "home"), (self.sidebar_button_send, "send"),
+                               (self.sidebar_button_receive, "receive"), (self.sidebar_button_history, "history")]:
+            is_active = name == btn_name
+            btn.configure(
+                fg_color=active_color if is_active else inactive_color,
+                text_color=active_text if is_active else inactive_text
+            )
         
         # Hide all
         self.home_frame.grid_forget()
@@ -211,28 +260,82 @@ class QuickShareApp(Tk):
         """Home Dashboard UI"""
         self.home_frame.grid_columnconfigure(0, weight=1)
         
-        ctk.CTkLabel(self.home_frame, text="QuickShare'e Hoşgeldiniz", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=40)
+        # Main Greeting
+        ctk.CTkLabel(self.home_frame, text="Hoşgeldiniz",
+                     font=ctk.CTkFont(family="Inter", size=30, weight="bold"),
+                     text_color=COLORS["text_bright"]).pack(pady=(50, 8), anchor="w", padx=50)
+        ctk.CTkLabel(self.home_frame, text="Dosyalarınızı sınır olmadan özgürce paylaşın.",
+                     font=ctk.CTkFont(family="Inter", size=14),
+                     text_color=COLORS["text_muted"]).pack(pady=(0, 40), anchor="w", padx=50)
         
-        # Status Cards
-        status_frame = ctk.CTkFrame(self.home_frame)
-        status_frame.pack(fill="x", padx=40, pady=20)
+        # Status Cards Container
+        cards_frame = ctk.CTkFrame(self.home_frame, fg_color="transparent")
+        cards_frame.pack(fill="x", padx=50, pady=10)
+        cards_frame.grid_columnconfigure((0, 1), weight=1)
         
-        ctk.CTkLabel(status_frame, text="Son Durum", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
-        ctk.CTkLabel(status_frame, text="Sistem Hazır ve Beklemede").pack(pady=(0, 20))
+        # Card 1: System Status
+        status_card = ctk.CTkFrame(cards_frame, corner_radius=16, fg_color=COLORS["surface"],
+                                   border_width=1, border_color=COLORS["border"])
+        status_card.grid(row=0, column=0, padx=(0, 10), sticky="nsew")
         
-        # Recent Activity
-        self.recent_frame = ctk.CTkFrame(self.home_frame)
-        self.recent_frame.pack(fill="x", padx=40, pady=20)
+        status_inner = ctk.CTkFrame(status_card, fg_color="transparent")
+        status_inner.pack(fill="x", padx=20, pady=20)
         
-        ctk.CTkLabel(self.recent_frame, text="Son İşlemler", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
-        self.recent_list = ctk.CTkFrame(self.recent_frame, fg_color="transparent")
-        self.recent_list.pack(fill="x", padx=10, pady=10)
+        icon_frame = ctk.CTkFrame(status_inner, width=48, height=48, corner_radius=12,
+                                   fg_color=COLORS["surface_hover"], border_width=1, border_color=COLORS["border"])
+        icon_frame.pack(side="left", padx=(0, 14))
+        icon_frame.pack_propagate(False)
+        ctk.CTkLabel(icon_frame, text="🛡️", font=ctk.CTkFont(size=18)).pack(expand=True)
+        
+        text_frame = ctk.CTkFrame(status_inner, fg_color="transparent")
+        text_frame.pack(side="left", fill="x")
+        ctk.CTkLabel(text_frame, text="Sistem Durumu",
+                     font=ctk.CTkFont(family="Inter", size=16, weight="bold"),
+                     text_color=COLORS["text_bright"]).pack(anchor="w")
+        self.home_status_text = ctk.CTkLabel(text_frame, text="Hazır ve Beklemede",
+                     font=ctk.CTkFont(family="Inter", size=13),
+                     text_color=COLORS["text_muted"])
+        self.home_status_text.pack(anchor="w")
+        
+        # Card 2: Recent Activity
+        recent_card = ctk.CTkFrame(cards_frame, corner_radius=16, fg_color=COLORS["surface"],
+                                   border_width=1, border_color=COLORS["border"])
+        recent_card.grid(row=0, column=1, padx=(10, 0), sticky="nsew")
+        
+        recent_header = ctk.CTkFrame(recent_card, fg_color="transparent")
+        recent_header.pack(fill="x", padx=20, pady=(20, 10))
+        
+        icon_frame2 = ctk.CTkFrame(recent_header, width=48, height=48, corner_radius=12,
+                                    fg_color=COLORS["surface_hover"], border_width=1, border_color=COLORS["border"])
+        icon_frame2.pack(side="left", padx=(0, 14))
+        icon_frame2.pack_propagate(False)
+        ctk.CTkLabel(icon_frame2, text="⚡", font=ctk.CTkFont(size=18)).pack(expand=True)
+        
+        ctk.CTkLabel(recent_header, text="Son İşlemler",
+                     font=ctk.CTkFont(family="Inter", size=16, weight="bold"),
+                     text_color=COLORS["text_bright"]).pack(side="left")
+        
+        self.recent_list = ctk.CTkFrame(recent_card, fg_color="transparent")
+        self.recent_list.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
         self.refresh_home_ui()
         
         # Quick Actions
-        ctk.CTkButton(self.home_frame, text="Yeni Dosya Gönder", command=lambda: self.select_frame("send"), height=40).pack(pady=10)
-        ctk.CTkButton(self.home_frame, text="Dosya Al", command=lambda: self.select_frame("receive"), height=40, fg_color="#06A77D", hover_color="#058c68").pack(pady=10)
+        actions_frame = ctk.CTkFrame(self.home_frame, fg_color="transparent")
+        actions_frame.pack(pady=40)
+        
+        ctk.CTkButton(actions_frame, text="  +  Yeni Dosya Gönder",
+                      font=ctk.CTkFont(family="Inter", size=15, weight="bold"), 
+                      command=lambda: self.select_frame("send"),
+                      height=50, corner_radius=12,
+                      fg_color=COLORS["primary"], hover_color=COLORS["primary_hover"]).pack(side="left", padx=10)
+        
+        ctk.CTkButton(actions_frame, text="  ⬇  Kodu Gir",
+                      font=ctk.CTkFont(family="Inter", size=15, weight="bold"), 
+                      command=lambda: self.select_frame("receive"),
+                      height=50, corner_radius=12,
+                      fg_color=COLORS["surface"], hover_color=COLORS["surface_hover"],
+                      border_width=1, border_color=COLORS["border"]).pack(side="left", padx=10)
 
     def refresh_home_ui(self):
         """Refresh home dashboard stats"""
@@ -241,117 +344,226 @@ class QuickShareApp(Tk):
             
         recent = history.get_recent(5)
         if not recent:
-            ctk.CTkLabel(self.recent_list, text="Henüz işlem yok.").pack()
+            ctk.CTkLabel(self.recent_list, text="Henüz işlem yok.",
+                         text_color=COLORS["text_muted"],
+                         font=ctk.CTkFont(family="Inter", size=13)).pack()
         else:
             for item in recent:
                 icon = "📤" if item['direction'] == "send" else "📥"
                 status = "✅" if item['status'] == "success" else "❌"
                 text = f"{icon} {item['filename']} ({format_size(item['size'])}) - {status}"
-                ctk.CTkLabel(self.recent_list, text=text, anchor="w").pack(fill="x", pady=2)
+                ctk.CTkLabel(self.recent_list, text=text, anchor="w",
+                             font=ctk.CTkFont(family="Inter", size=12),
+                             text_color=COLORS["text"]).pack(fill="x", pady=2)
 
     def setup_send_ui(self):
         """Send UI with Drag & Drop"""
         self.send_frame.grid_columnconfigure(0, weight=1)
-        self.send_frame.grid_rowconfigure(1, weight=1)  # File list expands
+        self.send_frame.grid_rowconfigure(2, weight=1)
         
         # Header
         header = ctk.CTkFrame(self.send_frame, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", padx=20, pady=20)
-        ctk.CTkLabel(header, text="Dosya Gönder", font=ctk.CTkFont(size=24, weight="bold")).pack(side="left")
+        header.grid(row=0, column=0, sticky="ew", padx=50, pady=(40, 8))
+        ctk.CTkLabel(header, text="Gönderim Merkezi",
+                     font=ctk.CTkFont(family="Inter", size=30, weight="bold"),
+                     text_color=COLORS["text_bright"]).pack(side="left")
         
-        # Drag & Drop Area / File List
-        self.file_tree = FileListTree(self.send_frame, columns=("size", "status")) # Added status column
-        self.file_tree.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
+        # Instructions
+        ctk.CTkLabel(self.send_frame,
+                     text="Dosyaları aşağıdaki alana sürükleyip bırakabilir veya butonları kullanabilirsiniz.",
+                     font=ctk.CTkFont(family="Inter", size=13),
+                     text_color=COLORS["text_muted"], anchor="w"
+        ).grid(row=1, column=0, sticky="ew", padx=50, pady=(0, 20))
         
-        # Enable Drop (Bind to tree)
+        # Drag & Drop Area / File List Card
+        list_container = ctk.CTkFrame(self.send_frame, corner_radius=16,
+                                      fg_color=COLORS["surface"],
+                                      border_width=1, border_color=COLORS["border"])
+        list_container.grid(row=2, column=0, sticky="nsew", padx=50, pady=0)
+        list_container.grid_columnconfigure(0, weight=1)
+        list_container.grid_rowconfigure(1, weight=1)
+        
+        # Top tools inside card
+        inner_tools = ctk.CTkFrame(list_container, fg_color="transparent")
+        inner_tools.grid(row=0, column=0, sticky="ew", padx=16, pady=16)
+        
+        ctk.CTkButton(inner_tools, text="📁  Dosya Seç",
+                      font=ctk.CTkFont(family="Inter", weight="bold"),
+                      command=self.select_files,
+                      fg_color=COLORS["primary"], hover_color=COLORS["primary_hover"],
+                      corner_radius=8, height=36).pack(side="left", padx=4)
+        ctk.CTkButton(inner_tools, text="📂  Klasör Seç",
+                      font=ctk.CTkFont(family="Inter", weight="bold"),
+                      command=self.select_folder,
+                      fg_color="#6366f1", hover_color="#4f46e5",
+                      corner_radius=8, height=36).pack(side="left", padx=4)
+        ctk.CTkButton(inner_tools, text="🗑️  Temizle",
+                      font=ctk.CTkFont(family="Inter", weight="bold"),
+                      command=self.clear_files,
+                      fg_color=COLORS["danger"], hover_color=COLORS["danger_hover"],
+                      corner_radius=8, width=100, height=36).pack(side="right", padx=4)
+
+        self.file_tree = FileListTree(list_container, columns=("size", "status"))
+        self.file_tree.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 16))
+        
+        # Enable Drop
         self.file_tree.drop_target_register(DND_FILES)
         self.file_tree.dnd_bind('<<Drop>>', self.on_drop)
         
-        # Controls
-        controls = ctk.CTkFrame(self.send_frame)
-        controls.grid(row=2, column=0, sticky="ew", padx=20, pady=20)
+        # Action Buttons (Cloud vs P2P)
+        controls = ctk.CTkFrame(self.send_frame, fg_color="transparent")
+        controls.grid(row=3, column=0, sticky="ew", padx=50, pady=24)
+        controls.grid_columnconfigure((0, 1), weight=1)
         
-        ctk.CTkButton(controls, text="📁 Dosya Ekle", command=self.select_files).pack(side="left", padx=10, pady=10)
-        ctk.CTkButton(controls, text="📂 Klasör Ekle", command=self.select_folder).pack(side="left", padx=10, pady=10)
-        ctk.CTkButton(controls, text="🗑️ Temizle", command=self.clear_files, fg_color="#D62246", hover_color="#b11d3a", width=80).pack(side="left", padx=10, pady=10)
-        
-        self.start_btn = ctk.CTkButton(controls, text="Bulut Paylaşım (Link)", command=self.start_sharing, font=ctk.CTkFont(weight="bold"))
-        self.start_btn.pack(side="right", padx=10, pady=10)
+        self.start_btn = ctk.CTkButton(
+            controls, text="☁  Bulut Linki Oluştur\nSunucu Üzerinden (URL - Max 100MB)", 
+            command=self.start_sharing,
+            font=ctk.CTkFont(family="Inter", size=14, weight="bold"), 
+            height=72, corner_radius=14,
+            fg_color=COLORS["surface"], hover_color=COLORS["surface_hover"],
+            border_width=1, border_color=COLORS["border"],
+            text_color=COLORS["text_bright"]
+        )
+        self.start_btn.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
-        self.direct_btn = ctk.CTkButton(controls, text="Direkt Paylaşım (Kod)", command=self.start_direct_sharing, fg_color="#E67E22", hover_color="#D35400", font=ctk.CTkFont(weight="bold"))
-        self.direct_btn.pack(side="right", padx=10, pady=10)
+        self.direct_btn = ctk.CTkButton(
+            controls, text="⚡  Doğrudan Cihaza Aktar\nP2P Kod ile Sınırsız Hız & Boyut", 
+            command=self.start_direct_sharing,
+            font=ctk.CTkFont(family="Inter", size=14, weight="bold"), 
+            height=72, corner_radius=14,
+            fg_color=COLORS["surface"], hover_color=COLORS["surface_hover"],
+            border_width=1, border_color=COLORS["border"],
+            text_color=COLORS["text_bright"]
+        )
+        self.direct_btn.grid(row=0, column=1, sticky="ew", padx=(8, 0))
         
-        # Active Sharing Info (Hidden initially)
-        self.sharing_info_frame = ctk.CTkFrame(self.send_frame, fg_color="transparent")
-        self.sharing_info_frame.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 20))
-        self.sharing_info_frame.grid_remove() # Start hidden
+        # Active Sharing Info Panel
+        self.sharing_info_frame = ctk.CTkFrame(self.send_frame, corner_radius=14,
+                                               fg_color=COLORS["secondary"],
+                                               border_width=0)
+        self.sharing_info_frame.grid(row=4, column=0, sticky="ew", padx=50, pady=(0, 24))
+        self.sharing_info_frame.grid_remove()
         
-        self.url_entry = ctk.CTkEntry(self.sharing_info_frame, placeholder_text="Paylaşım Linki...", state="readonly")
-        self.url_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        inner_share = ctk.CTkFrame(self.sharing_info_frame, fg_color="transparent")
+        inner_share.pack(fill="x", padx=20, pady=15)
         
-        ctk.CTkButton(self.sharing_info_frame, text="Kopyala", command=self.copy_url, width=80).pack(side="left")
+        self.url_entry = ctk.CTkEntry(inner_share, placeholder_text="Paylaşım Linki/Kodu...",
+                                      state="readonly", 
+                                      font=ctk.CTkFont(family="Consolas", size=14, weight="bold"), 
+                                      fg_color="#064e3b", border_width=0, text_color="#ffffff")
+        self.url_entry.pack(side="left", fill="x", expand=True, padx=(0, 12))
         
-        self.pause_btn = ctk.CTkButton(self.sharing_info_frame, text="⏸️", command=self.toggle_pause, width=40)
-        self.pause_btn.pack(side="left", padx=(10, 0))
+        ctk.CTkButton(inner_share, text="📋 Kopyala", command=self.copy_url,
+                      font=ctk.CTkFont(weight="bold"),
+                      fg_color="#059669", hover_color="#047857", width=100,
+                      corner_radius=8).pack(side="left")
         
-        ctk.CTkButton(self.sharing_info_frame, text="Durdur", command=self.stop_sharing, fg_color="#D62246", hover_color="#b11d3a", width=80).pack(side="left", padx=10)
+        self.pause_btn = ctk.CTkButton(inner_share, text="⏸️", command=self.toggle_pause,
+                                       width=40, corner_radius=8,
+                                       fg_color=COLORS["warning"], hover_color=COLORS["warning_hover"])
+        self.pause_btn.pack(side="left", padx=(8, 0))
+        
+        ctk.CTkButton(inner_share, text="🛑 Durdur", command=self.stop_sharing,
+                      fg_color=COLORS["danger"], hover_color=COLORS["danger_hover"],
+                      font=ctk.CTkFont(weight="bold"), width=100,
+                      corner_radius=8).pack(side="left", padx=8)
 
         # Stats
-        self.stats_label = ctk.CTkLabel(self.sharing_info_frame, text="")
-        self.stats_label.pack(side="bottom", pady=5)
+        self.stats_label = ctk.CTkLabel(self.sharing_info_frame, text="",
+                                       font=ctk.CTkFont(family="Inter", size=13, weight="bold"),
+                                       text_color="#ecfdf5")
+        self.stats_label.pack(side="bottom", pady=(0, 15))
 
     def setup_receive_ui(self):
         """Receive UI"""
         self.receive_frame.grid_columnconfigure(0, weight=1)
         
-        ctk.CTkLabel(self.receive_frame, text="Dosya Al", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=20, anchor="w", padx=20)
+        # Header
+        ctk.CTkLabel(self.receive_frame, text="Dosya Al",
+                     font=ctk.CTkFont(family="Inter", size=30, weight="bold"),
+                     text_color=COLORS["text_bright"]).pack(pady=(40, 8), anchor="w", padx=50)
+        ctk.CTkLabel(self.receive_frame, text="Kodu veya Linki girerek indirmeye başlayın.",
+                     font=ctk.CTkFont(family="Inter", size=13),
+                     text_color=COLORS["text_muted"]).pack(anchor="w", padx=50, pady=(0, 20))
         
-        # URL Input
-        input_frame = ctk.CTkFrame(self.receive_frame)
-        input_frame.pack(fill="x", padx=20, pady=10)
+        # URL Input Card
+        input_card = ctk.CTkFrame(self.receive_frame, fg_color=COLORS["surface"],
+                                   corner_radius=16, border_width=1, border_color=COLORS["border"])
+        input_card.pack(fill="x", padx=50, pady=(0, 16))
         
-        ctk.CTkLabel(input_frame, text="Paylaşım Linki:").pack(anchor="w", padx=10, pady=(10, 5))
+        url_box = ctk.CTkFrame(input_card, fg_color="transparent")
+        url_box.pack(fill="x", padx=20, pady=20)
         
-        url_box = ctk.CTkFrame(input_frame, fg_color="transparent")
-        url_box.pack(fill="x", padx=10, pady=(0, 10))
-        
-        self.url_input = ctk.CTkEntry(url_box, placeholder_text="https://...")
-        self.url_input.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.url_input = ctk.CTkEntry(url_box,
+                                      placeholder_text="6 Haneli Kod veya Link...",
+                                      font=ctk.CTkFont(family="Consolas", size=16),
+                                      fg_color=COLORS["bg"],
+                                      border_color=COLORS["border"],
+                                      corner_radius=12,
+                                      height=48)
+        self.url_input.pack(side="left", fill="x", expand=True, padx=(0, 12))
         self.url_input.bind('<Return>', lambda e: self.connect_to_url())
         
-        self.connect_btn = ctk.CTkButton(url_box, text="Bağlan", command=self.connect_to_url)
+        self.connect_btn = ctk.CTkButton(url_box, text="🔗 Bağlan",
+                                          command=self.connect_to_url,
+                                          font=ctk.CTkFont(family="Inter", weight="bold"),
+                                          fg_color=COLORS["primary"],
+                                          hover_color=COLORS["primary_hover"],
+                                          corner_radius=10, height=48, width=120)
         self.connect_btn.pack(side="right", padx=2)
 
-        self.connect_code_btn = ctk.CTkButton(url_box, text="Kodla Bağlan", command=self.connect_via_code, fg_color="#E67E22", hover_color="#D35400")
+        self.connect_code_btn = ctk.CTkButton(url_box, text="⚡ Kodla",
+                                               command=self.connect_via_code,
+                                               font=ctk.CTkFont(family="Inter", weight="bold"),
+                                               fg_color=COLORS["warning"],
+                                               hover_color=COLORS["warning_hover"],
+                                               corner_radius=10, height=48, width=100)
         self.connect_code_btn.pack(side="right", padx=2)
         
-        # Remote Files List
-        self.remote_files_frame = ctk.CTkFrame(self.receive_frame)
-        self.remote_files_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        # Remote Files List Card
+        self.remote_files_frame = ctk.CTkFrame(self.receive_frame, fg_color=COLORS["surface"],
+                                               corner_radius=16, border_width=1, border_color=COLORS["border"])
+        self.remote_files_frame.pack(fill="both", expand=True, padx=50, pady=(0, 12))
         
         self.remote_files_tree = FileListTree(self.remote_files_frame, columns=("size"), show_checkboxes=True)
-        self.remote_files_tree.pack(fill="both", expand=True)
+        self.remote_files_tree.pack(fill="both", expand=True, padx=12, pady=(12, 0))
         
-        self.download_btn = ctk.CTkButton(self.remote_files_frame, text="📥 İndir", command=self.start_download, fg_color="#06A77D", hover_color="#058c68")
-        self.download_btn.pack(fill="x", padx=10, pady=(0, 10))
+        self.download_btn = ctk.CTkButton(self.remote_files_frame, text="📥  İndir",
+                                           command=self.start_download,
+                                           fg_color=COLORS["secondary"],
+                                           hover_color=COLORS["secondary_hover"],
+                                           font=ctk.CTkFont(family="Inter", weight="bold"),
+                                           corner_radius=10, height=40)
+        self.download_btn.pack(fill="x", padx=12, pady=12)
         
-        # Progress (Persistent)
+        # Progress
         self.progress_frame = ctk.CTkFrame(self.receive_frame, fg_color="transparent")
-        self.progress_frame.pack(fill="x", padx=20, pady=10)
+        self.progress_frame.pack(fill="x", padx=50, pady=(0, 8))
         
-        self.progress_bar = ctk.CTkProgressBar(self.progress_frame)
-        self.progress_bar.pack(fill="x", pady=(0, 5))
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame,
+                                                progress_color=COLORS["primary"],
+                                                fg_color=COLORS["surface"],
+                                                corner_radius=6, height=8)
+        self.progress_bar.pack(fill="x", pady=(0, 6))
         self.progress_bar.set(0)
         
-        self.progress_label = ctk.CTkLabel(self.progress_frame, text="Hazır - İndirme Bekleniyor")
+        self.progress_label = ctk.CTkLabel(self.progress_frame, text="Hazır — İndirme Bekleniyor",
+                                           font=ctk.CTkFont(family="Inter", size=12),
+                                           text_color=COLORS["text_muted"])
         self.progress_label.pack()
         
         # Log Console
-        self.log_label = ctk.CTkLabel(self.receive_frame, text="İşlem Logları:", anchor="w")
-        self.log_label.pack(fill="x", padx=20, pady=(10, 0))
+        ctk.CTkLabel(self.receive_frame, text="İşlem Logları", anchor="w",
+                     font=ctk.CTkFont(family="Inter", size=12, weight="bold"),
+                     text_color=COLORS["text_muted"]).pack(fill="x", padx=50, pady=(8, 4))
         
-        self.log_box = ctk.CTkTextbox(self.receive_frame, height=100, state="disabled", font=ctk.CTkFont(family="Consolas", size=11))
-        self.log_box.pack(fill="x", padx=20, pady=5)
+        self.log_box = ctk.CTkTextbox(self.receive_frame, height=90, state="disabled",
+                                      font=ctk.CTkFont(family="Consolas", size=11),
+                                      fg_color=COLORS["bg"],
+                                      border_width=1, border_color=COLORS["border"],
+                                      corner_radius=10,
+                                      text_color=COLORS["text"])
+        self.log_box.pack(fill="x", padx=50, pady=(0, 20))
 
     def log_message(self, msg):
         """Log mesajını UI'a yaz"""
@@ -364,46 +576,106 @@ class QuickShareApp(Tk):
         """Settings UI"""
         self.settings_frame.grid_columnconfigure(0, weight=1)
         
-        ctk.CTkLabel(self.settings_frame, text="Ayarlar", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=20)
+        # Header
+        ctk.CTkLabel(self.settings_frame, text="Ayarlar",
+                     font=ctk.CTkFont(family="Inter", size=30, weight="bold"),
+                     text_color=COLORS["text_bright"]).pack(pady=(40, 8), anchor="w", padx=50)
+        ctk.CTkLabel(self.settings_frame, text="Uygulama yapılandırmasını buradan düzenleyebilirsiniz.",
+                     font=ctk.CTkFont(family="Inter", size=13),
+                     text_color=COLORS["text_muted"]).pack(anchor="w", padx=50, pady=(0, 24))
         
-        # Cloudflare Tunnel Config
-        groups = ctk.CTkFrame(self.settings_frame)
-        groups.pack(fill="x", padx=20, pady=10)
+        # Scrollable area for settings cards
+        settings_scroll = ctk.CTkScrollableFrame(self.settings_frame, fg_color="transparent")
+        settings_scroll.pack(fill="both", expand=True, padx=50)
+        settings_scroll.grid_columnconfigure(0, weight=1)
         
-        ctk.CTkLabel(groups, text="Cloudflare Tunnel Ayarları (Sınırsız)", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10)
+        # Card 1: Cloudflare Tunnel
+        cf_card = ctk.CTkFrame(settings_scroll, corner_radius=16, fg_color=COLORS["surface"],
+                                border_width=1, border_color=COLORS["border"])
+        cf_card.pack(fill="x", pady=(0, 16))
         
-        ctk.CTkLabel(groups, text="Tunnel Token (Zero Trust):").pack(anchor="w", padx=10)
-        self.entry_token = ctk.CTkEntry(groups, placeholder_text="eyJhIjoi...")
-        self.entry_token.pack(fill="x", padx=10, pady=5)
+        cf_header = ctk.CTkFrame(cf_card, fg_color="transparent")
+        cf_header.pack(fill="x", padx=20, pady=(20, 14))
+        ctk.CTkLabel(cf_header, text="☁️",
+                     font=ctk.CTkFont(size=16)).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(cf_header, text="Cloudflare Tunnel",
+                     font=ctk.CTkFont(family="Inter", size=16, weight="bold"),
+                     text_color=COLORS["text_bright"]).pack(side="left")
+        
+        cf_body = ctk.CTkFrame(cf_card, fg_color="transparent")
+        cf_body.pack(fill="x", padx=20, pady=(0, 20))
+        
+        ctk.CTkLabel(cf_body, text="Tunnel Token",
+                     font=ctk.CTkFont(family="Inter", size=12),
+                     text_color=COLORS["text_muted"]).pack(anchor="w", pady=(0, 4))
+        self.entry_token = ctk.CTkEntry(cf_body, placeholder_text="Token (opsiyonel)",
+                                        fg_color=COLORS["bg"], border_color=COLORS["border"],
+                                        corner_radius=10, height=40)
+        self.entry_token.pack(fill="x", pady=(0, 12))
         self.entry_token.insert(0, CF_TUNNEL_TOKEN)
         
-        ctk.CTkLabel(groups, text="Public URL (örn: https://share.mysite.com):").pack(anchor="w", padx=10, pady=(10,0))
-        self.entry_url = ctk.CTkEntry(groups, placeholder_text="https://...")
-        self.entry_url.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(cf_body, text="Public URL",
+                     font=ctk.CTkFont(family="Inter", size=12),
+                     text_color=COLORS["text_muted"]).pack(anchor="w", pady=(0, 4))
+        self.entry_url = ctk.CTkEntry(cf_body, placeholder_text="https://...",
+                                      fg_color=COLORS["bg"], border_color=COLORS["border"],
+                                      corner_radius=10, height=40)
+        self.entry_url.pack(fill="x")
         self.entry_url.insert(0, CF_TUNNEL_URL)
         
-        ctk.CTkButton(groups, text="💾 Kaydet", command=self.save_settings).pack(pady=20)
+        # Card 2: DuckDNS
+        ddns_card = ctk.CTkFrame(settings_scroll, corner_radius=16, fg_color=COLORS["surface"],
+                                  border_width=1, border_color=COLORS["border"])
+        ddns_card.pack(fill="x", pady=(0, 16))
         
-        ctk.CTkLabel(groups, text="Not: Token girilmezse geçici (limitli) tunnel kullanılır.", text_color="gray").pack(pady=10)
-
-        # DuckDNS Config
-        ddns_group = ctk.CTkFrame(self.settings_frame)
-        ddns_group.pack(fill="x", padx=20, pady=10)
+        ddns_header = ctk.CTkFrame(ddns_card, fg_color="transparent")
+        ddns_header.pack(fill="x", padx=20, pady=(20, 14))
+        ctk.CTkLabel(ddns_header, text="🌐",
+                     font=ctk.CTkFont(size=16)).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(ddns_header, text="DuckDNS",
+                     font=ctk.CTkFont(family="Inter", size=16, weight="bold"),
+                     text_color=COLORS["text_bright"]).pack(side="left")
         
-        ctk.CTkLabel(ddns_group, text="DuckDNS Ayarları (Direct Mode)", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10)
+        ddns_body = ctk.CTkFrame(ddns_card, fg_color="transparent")
+        ddns_body.pack(fill="x", padx=20, pady=(0, 20))
         
         self.use_duckdns_var = ctk.BooleanVar(value=USE_DUCKDNS)
-        ctk.CTkSwitch(ddns_group, text="DuckDNS Kullan (Port 5000 açık olmalı)", variable=self.use_duckdns_var).pack(anchor="w", padx=20, pady=5)
+        ctk.CTkSwitch(ddns_body, text="DuckDNS Kullan (Port 5000 açık olmalı)",
+                      variable=self.use_duckdns_var,
+                      font=ctk.CTkFont(family="Inter", size=13),
+                      text_color=COLORS["text"],
+                      progress_color=COLORS["secondary"]).pack(anchor="w", pady=(0, 14))
         
-        ctk.CTkLabel(ddns_group, text="Domain (örn: myapp.duckdns.org ise sadece 'myapp'):").pack(anchor="w", padx=10)
-        self.entry_duck_domain = ctk.CTkEntry(ddns_group)
-        self.entry_duck_domain.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(ddns_body, text="Domain",
+                     font=ctk.CTkFont(family="Inter", size=12),
+                     text_color=COLORS["text_muted"]).pack(anchor="w", pady=(0, 4))
+        self.entry_duck_domain = ctk.CTkEntry(ddns_body, placeholder_text="myapp",
+                                               fg_color=COLORS["bg"], border_color=COLORS["border"],
+                                               corner_radius=10, height=40)
+        self.entry_duck_domain.pack(fill="x", pady=(0, 12))
         self.entry_duck_domain.insert(0, DUCKDNS_DOMAIN)
         
-        ctk.CTkLabel(ddns_group, text="Token:").pack(anchor="w", padx=10)
-        self.entry_duck_token = ctk.CTkEntry(ddns_group)
-        self.entry_duck_token.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(ddns_body, text="Token",
+                     font=ctk.CTkFont(family="Inter", size=12),
+                     text_color=COLORS["text_muted"]).pack(anchor="w", pady=(0, 4))
+        self.entry_duck_token = ctk.CTkEntry(ddns_body, placeholder_text="Token",
+                                              fg_color=COLORS["bg"], border_color=COLORS["border"],
+                                              corner_radius=10, height=40)
+        self.entry_duck_token.pack(fill="x")
         self.entry_duck_token.insert(0, DUCKDNS_TOKEN)
+        
+        # Save Button
+        save_frame = ctk.CTkFrame(self.settings_frame, fg_color="transparent")
+        save_frame.pack(fill="x", padx=50, pady=(8, 24))
+        
+        ctk.CTkButton(save_frame, text="💾  Kaydet", command=self.save_settings,
+                      font=ctk.CTkFont(family="Inter", size=14, weight="bold"),
+                      fg_color=COLORS["primary"], hover_color=COLORS["primary_hover"],
+                      corner_radius=12, height=44, width=160).pack(side="right")
+        
+        ctk.CTkLabel(save_frame, text="Token girilmezse geçici (limitli) tunnel kullanılır.",
+                     font=ctk.CTkFont(family="Inter", size=12),
+                     text_color=COLORS["text_muted"]).pack(side="left")
 
     def save_settings(self):
         token = self.entry_token.get().strip()
@@ -429,18 +701,6 @@ class QuickShareApp(Tk):
 
 
     # --- WebRTC P2P Logic ---
-
-    def toggle_p2p_mode(self):
-        """Handle P2P Switch"""
-        if self.speed_switch.get() == 1:
-            self.use_p2p = True
-            self.status_label.configure(text="🟢 P2P Aktif", text_color="#06A77D")
-        else:
-            self.use_p2p = False
-            self.status_label.configure(text="🔴 P2P Kapalı", text_color="#ff5555")
-            if self.webrtc_sender:
-                self.webrtc_sender.stop()
-                self.webrtc_sender = None
 
     def on_drop(self, event):
         """Handle Drag & Drop files"""
@@ -483,8 +743,15 @@ class QuickShareApp(Tk):
     def start_direct_sharing(self):
         """Start sharing via Signaling Server (Direct P2P, No Tunnel)"""
         if not self.selected_files:
-            messagebox.showwarning("Uyarı", "Dosya seçiniz.")
+            ToastNotification.show_toast(self, "Dosya seçiniz.", type="warning")
             return
+
+        dialog = ctk.CTkInputDialog(text="P2P oturumuna parola eklensin mi?\n(İstemiyorsanız boş bırakın):", title="Parola Koruması (İsteğe Bağlı)")
+        password = dialog.get_input()
+        if password is None: # User cancelled
+            return
+            
+        self.current_session_password = password.strip() if password else None
 
         self.start_btn.configure(state="disabled")
         self.direct_btn.configure(state="disabled", text="Başlatılıyor...")
@@ -500,6 +767,7 @@ class QuickShareApp(Tk):
             
             # Get loop ready then initialize Signaling Client
             self.webrtc_sender = WebRTCSender()
+            self.webrtc_sender.password = getattr(self, "current_session_password", None)
             self.webrtc_sender.start() # Starts thread
             self.webrtc_sender.wait_until_ready() # Wait for loop
             
@@ -578,8 +846,8 @@ class QuickShareApp(Tk):
             srv.webrtc_sender = None
             
         self.sharing_info_frame.grid_remove()
-        self.start_btn.configure(state="normal", text="🚀 Paylaş (Link)")
-        self.direct_btn.configure(state="normal", text="⚡ Direkt (Kod)")
+        self.start_btn.configure(state="normal", text="🌐 Bulut Üzerinden (URL - Max 100MB)")
+        self.direct_btn.configure(state="normal", text="⚡ Doğrudan P2P (Kod - Sınırsız)")
         self.status_label.configure(text="Durum: Hazır", text_color="white")
 
     def _on_direct_sharing_started(self, room_id):
@@ -596,8 +864,15 @@ class QuickShareApp(Tk):
         """Connect to sender using code"""
         code = self.url_input.get().strip().replace("Kod: ", "")
         if not code:
-            messagebox.showwarning("Uyarı", "Lütfen kodu girin.")
+            ToastNotification.show_toast(self, "Lütfen kodu girin.", type="warning")
             return
+            
+        dialog = ctk.CTkInputDialog(text="Eğer gönderici parola koyduysa giriniz\n(Yoksa boş bırakın):", title="Kimlik Doğrulama")
+        password = dialog.get_input()
+        if password is None:
+            return
+            
+        self.current_session_password = password.strip() if password else None
             
         self.connect_btn.configure(state="disabled", text="Bağlanıyor...")
         self.connect_code_btn.configure(state="disabled")
@@ -609,6 +884,15 @@ class QuickShareApp(Tk):
              self.log_message(f"Sinyal sunucusuna bağlanılıyor... (Oda: {code})")
              
              receiver = WebRTCReceiver()
+             receiver.password = getattr(self, "current_session_password", None)
+             
+             def on_auth_err():
+                 self.after(0, lambda: ToastNotification.show_toast(self, "Parola Hatalı ya da Gerekli!", type="error"))
+                 self.after(0, lambda: self.connect_code_btn.configure(state="normal", text="Doğrudan Cihaza Bağlan (Kod)"))
+                 self.after(0, lambda: self.connect_btn.configure(state="normal", text="Bağlan"))
+                 self.after(0, lambda: self.status_label.configure(text="Bağlantı Bekleniyor", text_color="white"))
+             receiver.on_auth_failed = on_auth_err
+             
              receiver.start() # Start loop
              receiver.wait_until_ready() # Wait for loop
              
@@ -684,75 +968,6 @@ class QuickShareApp(Tk):
         try:
             set_shared_files(self.selected_files)
             
-            # Setup WebRTC sender if P2P is enabled
-            if self.use_p2p:
-                from server import webrtc_sender as _ws
-                import server as srv
-                from utils import create_file_info, get_files_from_directory
-                
-                self.webrtc_sender = WebRTCSender()
-                self.webrtc_sender.start()
-                self.webrtc_sender.log_callback = lambda msg: print(f"[P2P] {msg}")
-                
-                # Feed P2P progress into transfer_monitor for sender stats bar
-                def sender_progress(sent, total, speed, current_file_idx, total_files):
-                    transfer_monitor.total_sent = sent
-                    transfer_monitor.total_size = total
-                    transfer_monitor.current_speed = speed # Update monitor speed from WebRTC
-                    
-                    if transfer_monitor.active_transfers == 0:
-                        transfer_monitor.active_transfers = 1
-                    
-                    # Update per-file progress in UI
-                    if self.webrtc_sender and self.webrtc_sender.files:
-                        files = self.webrtc_sender.files
-                        cumulative = 0
-                        for idx, f_info in enumerate(files):
-                            fname = os.path.basename(f_info['name'])
-                            path = f_info['path']
-                            
-                            # Find item in tree by path (data)
-                            item_id = self.file_tree.find_item_by_data(path)
-                            
-                            if cumulative + f_info['size'] >= sent:
-                                # This is the file currently being sent or just finished
-                                if cumulative <= sent:
-                                    file_sent = min(sent - cumulative, f_info['size'])
-                                    pct = (file_sent / f_info['size'] * 100) if f_info['size'] > 0 else 100
-                                    
-                                    if item_id:
-                                        status_text = f"%{pct:.0f}"
-                                        if file_sent >= f_info['size']: status_text = "✅ %100"
-                                        self.after(0, self.file_tree.set_item_value, item_id, "status", status_text)
-                                    
-                                    # Also update monitor for other uses
-                                    transfer_monitor.update_file_progress(fname, file_sent, f_info['size'])
-                                    
-                                    if file_sent < f_info['size']:
-                                        break # Stop checking next files
-                            else:
-                                # This file is complete
-                                if item_id:
-                                    self.after(0, self.file_tree.set_item_value, item_id, "status", "✅ Gönderildi")
-                                
-                                transfer_monitor.update_file_progress(fname, f_info['size'], f_info['size'])
-                                cumulative += f_info['size']
-                                
-                self.webrtc_sender.progress_callback = sender_progress
-                
-                # Build file list for WebRTC sender
-                file_list = []
-                for path in self.selected_files:
-                    if os.path.isfile(path):
-                        file_list.append({"name": os.path.basename(path), "path": path, "size": os.path.getsize(path)})
-                    elif os.path.isdir(path):
-                        for f in get_files_from_directory(path):
-                            rel = os.path.relpath(f, path)
-                            file_list.append({"name": rel, "path": f, "size": os.path.getsize(f)})
-                
-                self.webrtc_sender.set_files(file_list)
-                srv.webrtc_sender = self.webrtc_sender
-            
             self.server_thread = threading.Thread(target=run_server, daemon=True)
             self.server_thread.start()
             time.sleep(1)
@@ -800,21 +1015,23 @@ class QuickShareApp(Tk):
             return
             
         stats = transfer_monitor.get_stats()
-        # Use monitor speed which is now updated by WebRTC callback
         speed_val = stats['speed']
-        if self.use_p2p and self.webrtc_sender:
-             speed_val = self.webrtc_sender._current_speed
-             if self.is_paused:
-                 speed_val = 0.0
 
         text = f"Hız: {format_speed(speed_val)} | Gönderilen: {format_size(stats['total_sent'])} | Aktif: {stats['active']}"
         self.stats_label.configure(text=text)
         
         # Update Connection Status
-        if stats['active'] > 0:
-            self.status_label.configure(text="🟢 Aktif Transfer", text_color="#06A77D")
+        if self.webrtc_sender:
+            connected_peers = sum(1 for p in self.webrtc_sender.peers.values() if p.get("status") in ["connected", "transferring"])
+            if connected_peers > 0:
+                self.status_label.configure(text=f"🟢 P2P Aktif ({connected_peers} Kişi Bağlı)", text_color="#06A77D")
+            else:
+                self.status_label.configure(text="🟡 P2P Beklemede (Kimse Bağlı Değil)", text_color="#F7D358")
         else:
-            self.status_label.configure(text="🟡 Beklemede", text_color="#F7D358")
+            if stats['active'] > 0:
+                self.status_label.configure(text="🟢 Aktif Transfer", text_color="#06A77D")
+            else:
+                self.status_label.configure(text="🟡 Beklemede", text_color="#F7D358")
             
         # Update File Progress
         if 'files' in stats:
@@ -845,7 +1062,7 @@ class QuickShareApp(Tk):
             srv.webrtc_sender = None
             
         self.sharing_info_frame.grid_remove()
-        self.start_btn.configure(state="normal", text="🚀 Paylaş")
+        self.start_btn.configure(state="normal", text="🌐 Bulut Üzerinden (URL - Max 100MB)")
         self.status_label.configure(text="Durum: Hazır", text_color="white") # Reset status label
 
     def toggle_pause(self):
@@ -853,16 +1070,19 @@ class QuickShareApp(Tk):
         if not self.webrtc_sender:
             return
             
+        # Get count
+        connected_peers = sum(1 for p in self.webrtc_sender.peers.values() if p.get("status") in ["connected", "transferring"])
+            
         if self.is_paused:
             self.webrtc_sender.resume()
             self.is_paused = False
             self.pause_btn.configure(text="⏸️")
-            self.status_label.configure(text="🟢 P2P Aktif", text_color="#06A77D")
+            self.status_label.configure(text=f"🟢 P2P Aktif ({connected_peers} Kişi Bağlı)", text_color="#06A77D")
         else:
             self.webrtc_sender.pause()
             self.is_paused = True
             self.pause_btn.configure(text="▶️")
-            self.status_label.configure(text="⏸️ P2P Duraklatıldı", text_color="#F7D358")
+            self.status_label.configure(text=f"⏸️ P2P Duraklatıldı ({connected_peers} Kişi Bağlı)", text_color="#F7D358")
 
     def copy_url(self):
         url = self.url_entry.get()
@@ -885,18 +1105,7 @@ class QuickShareApp(Tk):
             self.downloader = Downloader()
             files = self.downloader.get_file_list(self.download_url)
             self.remote_files = files
-            
-            # Check if sender supports P2P
-            self._p2p_available = False
-            if self.use_p2p:
-                try:
-                    import requests
-                    resp = requests.get(f"{self.download_url}/rtc/status", timeout=5)
-                    if resp.ok and resp.json().get("p2p"):
-                        self._p2p_available = True
-                        print("[P2P] Gönderen P2P destekliyor!")
-                except:
-                    print("[P2P] P2P durumu kontrol edilemedi, HTTP fallback kullanılacak.")
+            self._p2p_available = False # URL sharing no longer attempts to start P2P
             
             self.after(0, self._on_connected)
         except Exception as e:
@@ -1081,7 +1290,7 @@ class QuickShareApp(Tk):
                  
             self.after(0, self._on_download_complete, save_path)
         except Exception as e:
-            self.after(0, lambda: messagebox.showerror("Hata", str(e)))
+            self.after(0, lambda: ToastNotification.show_toast(self, str(e), type="error"))
             self.after(0, self._reset_download_ui)
 
 
@@ -1092,7 +1301,7 @@ class QuickShareApp(Tk):
 
     def _on_download_complete(self, path):
         msg = f"Dosyalar indirildi:\n{path}"
-        messagebox.showinfo("Tamamlandı", msg)
+        ToastNotification.show_toast(self, msg, type="success")
         
         if self.tray_manager:
             self.tray_manager.show_notification("İndirme Tamamlandı", f"{os.path.basename(path)} indirildi.")

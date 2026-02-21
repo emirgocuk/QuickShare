@@ -22,17 +22,29 @@ CLOUDFLARED_BINARY = "bin/cloudflared.exe"
 CLOUDFLARED_STARTUP_TIMEOUT = 30   # Tunnel URL alınana kadar max bekleme (saniye)
 
 # WebRTC P2P Ayarları
-WEBRTC_CHUNK_SIZE = 16 * 1024  # 16KB per DataChannel message (smaller = better SCTP throughput)
+WEBRTC_CHUNK_SIZE = 64 * 1024  # 64KB per DataChannel message (larger = better throughput)
 ICE_SERVERS = [
     {"urls": "stun:stun.l.google.com:19302"},
     {"urls": "stun:stun1.l.google.com:19302"},
     {"urls": "stun:stun.cloudflare.com:3478"},
-    # TURN Server Örneği (Simetrik NAT için gereklidir)
-    # {
-    #     "urls": "turn:your-turn-server.com:3478",
-    #     "username": "user",
-    #     "credential": "password"
-    # }
+    
+    # Ücretsiz Public Test TURN Sunucuları (Metered.ca OpenRelay)
+    # Simetrik NAT arkasındaki makinelerin birbiriyle eşleşebilmesi için zorunludur.
+    {
+        "urls": "turn:openrelay.metered.ca:80",
+        "username": "openrelayproject",
+        "credential": "openrelayproject"
+    },
+    {
+        "urls": "turn:openrelay.metered.ca:443",
+        "username": "openrelayproject",
+        "credential": "openrelayproject"
+    },
+    {
+        "urls": "turn:openrelay.metered.ca:443?transport=tcp",
+        "username": "openrelayproject",
+        "credential": "openrelayproject"
+    }
 ]
 WEBRTC_TIMEOUT = 15  # P2P bağlantı kurulma süresi (saniye)
 

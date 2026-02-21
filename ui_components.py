@@ -50,34 +50,37 @@ class FileListTree(ctk.CTkFrame):
         style = ttk.Style()
         style.theme_use("clam")
         
-        # Dark Theme Configuration
-        bg_color = "#2b2b2b"
-        fg_color = "#dce4ee"
-        selected_bg = "#1f538d"
-        heading_bg = "#3a3a3a"
+        # Premium Dark Theme
+        bg_color = "#0D1117"
+        alt_bg = "#161B22"
+        fg_color = "#c9d1d9"
+        selected_bg = "#1f6feb"
+        heading_bg = "#161B22"
+        heading_fg = "#8b949e"
+        border_color = "#30363d"
         
         style.configure("Treeview", 
                         background=bg_color,
                         foreground=fg_color,
                         fieldbackground=bg_color,
                         borderwidth=0,
-                        rowheight=28,
-                        font=("Segoe UI", 10))
+                        rowheight=36,
+                        font=("Segoe UI", 11))
         
         style.configure("Treeview.Heading",
                         background=heading_bg,
-                        foreground="#ffffff",
-                        borderwidth=1,
+                        foreground=heading_fg,
+                        borderwidth=0,
                         relief="flat",
-                        padding=5,
-                        font=("Segoe UI", 10, "bold"))
+                        padding=(12, 8),
+                        font=("Segoe UI", 11, "bold"))
         
         style.map("Treeview", 
                   background=[('selected', selected_bg)],
                   foreground=[('selected', '#ffffff')])
                   
         style.map("Treeview.Heading",
-                  background=[('active', '#4a4a4a')])
+                  background=[('active', '#21262D')])
 
     def add_item(self, text, is_folder=False, size_str="", status="", parent="", iid=None, data=None):
         """Add a generic item to the tree"""
@@ -216,3 +219,101 @@ class FileListTree(ctk.CTkFrame):
             if data == data_value:
                 return iid
         return None
+
+class ToastNotification(ctk.CTkFrame):
+    """
+    Modern sliding toast notification for CustomTkinter.
+    Displays a non-blocking floating alert message.
+    """
+    def __init__(self, master, message, type="info", duration=3000, **kwargs):
+        super().__init__(master, fg_color="transparent", bg_color="transparent", **kwargs)
+        self.master = master
+        self.duration = duration
+        
+        # Colors based on type
+        colors = {
+            "info": ("#2B2B2B", "#3B82F6"),    # Dark gray bg, Blue accent
+            "success": ("#2B2B2B", "#10B981"), # Dark gray bg, Green accent
+            "error": ("#2B2B2B", "#EF4444"),   # Dark gray bg, Red accent
+            "warning": ("#2B2B2B", "#F59E0B")  # Dark gray bg, Orange accent
+        }
+        bg_col, accent_col = colors.get(type, colors["info"])
+
+        # Main Container
+        self.container = ctk.CTkFrame(self, fg_color=bg_col, corner_radius=8, border_width=1, border_color=accent_col)
+        self.container.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Icon/Accent line
+        self.accent = ctk.CTkFrame(self.container, width=4, fg_color=accent_col, corner_radius=4)
+        self.accent.pack(side="left", fill="y", padx=(4, 0), pady=4)
+
+        # Message
+        self.msg_label = ctk.CTkLabel(self.container, text=message, font=ctk.CTkFont(size=13), text_color="white", wraplength=300)
+        self.msg_label.pack(side="left", padx=15, pady=8)
+
+        # Basic Animation state
+        self.target_y = 0
+        self.current_y = 100
+        self.animating = False
+        
+    def show(self):
+        """Displays the toast with a slide-up animation from the bottom"""
+        self.master.update_idletasks()
+        window_width = self.master.winfo_width()
+        window_height = self.master.winfo_height()
+        
+        # Calculate sizes to center it
+        self.update_idletasks()
+        toast_width = self.msg_label.winfo_reqwidth() + 60
+        toast_height = self.msg_label.winfo_reqheight() + 30
+        
+        x_pos = (window_width - toast_width) // 2
+        
+        # Start below screen
+        self.place(x=x_pos, y=window_height, width=toast_width, height=toast_height)
+        self.lift()
+        
+        # Target Y is slightly above bottom
+        self.target_y = window_height - toast_height - 30
+        self.current_y = window_height
+        
+        self.animating = True
+        self._slide_in()
+
+    def _slide_in(self):
+        if not self.animating: return
+        
+        # Simple easing
+        diff = self.current_y - self.target_y
+        if diff > 1:
+            self.current_y -= diff * 0.2
+            self.place(y=int(self.current_y))
+            self.after(16, self._slide_in)
+        else:
+            self.place(y=self.target_y)
+            # Schedule hide
+            self.after(self.duration, self.hide)
+            
+    def hide(self):
+        """Hides the toast with a slide-down animation"""
+        self.animating = True
+        self.target_y = self.master.winfo_height() + 50
+        self._slide_out()
+        
+    def _slide_out(self):
+        if not self.animating: return
+        
+        diff = self.target_y - self.current_y
+        if diff > 1:
+            self.current_y += diff * 0.2
+            self.place(y=int(self.current_y))
+            self.after(16, self._slide_out)
+        else:
+            self.destroy()
+
+    @staticmethod
+    def show_toast(master, message, type="info", duration=3000):
+        """Helper to create and show a toast instantly"""
+        toast = ToastNotification(master, message, type, duration)
+        toast.show()
+        return toast
